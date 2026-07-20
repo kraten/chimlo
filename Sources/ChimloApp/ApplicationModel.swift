@@ -137,6 +137,7 @@ final class ApplicationModel: ObservableObject {
     private var previewSessionIDs: Set<String> = []
     private var deniedDemoSessionIDs: Set<String> = []
     private var hiddenSessionIDs: Set<String> = []
+    private var archivedSessionMarkers: [String: SessionArchiveMarker]
     private var onboardingSessionID: String?
     private var onboardingEvents: [AgentEvent] = []
     private var onboardingTask: Task<Void, Never>?
@@ -247,6 +248,7 @@ final class ApplicationModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        archivedSessionMarkers = Self.loadArchivedSessionMarkers(from: defaults)
         islandLayout = IslandLayout.make(
             for: IslandDisplayMetrics(
                 screenWidth: 0,
@@ -556,6 +558,16 @@ final class ApplicationModel: ObservableObject {
         NSWorkspace.shared.open(jumpURL)
     }
 
+    func archiveSession(_ session: SessionDisplayModel) {
+        guard !session.isDemo,
+              let source = reducer.sessions[session.id],
+              source.pendingRequest == nil else { return }
+
+        archivedSessionMarkers[session.id] = SessionArchiveMarker()
+        persistArchivedSessionMarkers()
+        syncSessionProjections()
+    }
+
     private func receiveLiveEvent(_ event: AgentEvent) {
         hiddenSessionIDs.formUnion(previewSessionIDs)
         recordReceipt(for: event.agent)
@@ -598,6 +610,7 @@ final class ApplicationModel: ObservableObject {
         let wasArmedForCompletion = sessionsArmedForCompletion.contains(event.sessionID)
         let result = reducer.apply(event)
         guard case .applied = result else { return }
+        if !isDemo { restoreArchivedSessionIfNeeded(for: event) }
         let isNewCompletion = IslandCollapsePolicy.isNewCompletion(
             wasArmedForCompletion: wasArmedForCompletion,
             eventKind: event.kind
@@ -695,7 +708,8 @@ final class ApplicationModel: ObservableObject {
 
     private func syncSessionProjections() {
         sessions = reducer.orderedSessions.compactMap { session in
-            guard !hiddenSessionIDs.contains(session.id) else { return nil }
+            guard !hiddenSessionIDs.contains(session.id),
+                  archivedSessionMarkers[session.id] == nil else { return nil }
             let isDemo = demoSessionIDs.contains(session.id)
             return SessionDisplayModel(
                 id: session.id,
@@ -751,6 +765,7 @@ final class ApplicationModel: ObservableObject {
     private func receive(_ candidate: SessionCandidate) {
         hiddenSessionIDs.formUnion(previewSessionIDs)
         sessionRemovalTasks.removeValue(forKey: candidate.id)?.cancel()
+        restoreArchivedSessionIfNeeded(for: candidate)
         let previous = reducer.sessions[candidate.id]
         let merged = reducer.merge(candidate)
         let hasNewResponse = candidate.latestAgentResponse != nil
@@ -789,6 +804,9 @@ final class ApplicationModel: ObservableObject {
         sessionsArmedForCompletion.remove(sessionID)
         latestResponseReceivedAt.removeValue(forKey: sessionID)
         lastPresentedResponse.removeValue(forKey: sessionID)
+        if archivedSessionMarkers.removeValue(forKey: sessionID) != nil {
+            persistArchivedSessionMarkers()
+        }
         guard reducer.remove(sessionID: sessionID) != nil else { return }
         syncSessionProjections()
         localSessionRuntime.persist(reducer.orderedSessions)
@@ -822,6 +840,37 @@ final class ApplicationModel: ObservableObject {
         guard let provider else { return }
         defaults.set(Date().timeIntervalSince1970, forKey: receiptKey(for: provider))
         refreshAgentConnections()
+    }
+
+    private func restoreArchivedSessionIfNeeded(for candidate: SessionCandidate) {
+        guard let marker = archivedSessionMarkers[candidate.id],
+              marker.shouldRestore(for: candidate) else { return }
+        archivedSessionMarkers.removeValue(forKey: candidate.id)
+        persistArchivedSessionMarkers()
+    }
+
+    private func restoreArchivedSessionIfNeeded(for event: AgentEvent) {
+        guard let marker = archivedSessionMarkers[event.sessionID],
+              marker.shouldRestore(for: event) else { return }
+        archivedSessionMarkers.removeValue(forKey: event.sessionID)
+        persistArchivedSessionMarkers()
+    }
+
+    private func persistArchivedSessionMarkers() {
+        let values = archivedSessionMarkers.mapValues { $0.archivedAt.timeIntervalSince1970 }
+        defaults.set(values, forKey: Keys.archivedSessions)
+    }
+
+    private static func loadArchivedSessionMarkers(
+        from defaults: UserDefaults
+    ) -> [String: SessionArchiveMarker] {
+        guard let stored = defaults.dictionary(forKey: Keys.archivedSessions) else { return [:] }
+        return stored.reduce(into: [:]) { result, entry in
+            guard let timestamp = entry.value as? NSNumber else { return }
+            result[entry.key] = SessionArchiveMarker(
+                archivedAt: Date(timeIntervalSince1970: timestamp.doubleValue)
+            )
+        }
     }
 
     private func connectionState(for provider: AgentProvider) -> AgentConnectionState {
@@ -993,6 +1042,7 @@ final class ApplicationModel: ObservableObject {
         static let completedOnboarding = "chimlo.onboarding.completed"
         static let soundsEnabled = "chimlo.sound.enabled"
         static let keepPreviewSession = "chimlo.preview.keepSession"
+        static let archivedSessions = "chimlo.sessions.archived"
     }
 }
 
