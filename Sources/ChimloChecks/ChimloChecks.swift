@@ -35,6 +35,7 @@ private struct CheckSuite {
         notchLayout()
         hookPrivacyMapping()
         transcriptMetadataPrivacy()
+        sessionArchiveVisibility()
         codexHookConfiguration()
         claudeHookConfiguration()
         coreLifecycle()
@@ -157,6 +158,57 @@ private struct CheckSuite {
         } catch {
             failures.append("FAIL  privacy-safe hook mapping: \(error)")
         }
+    }
+
+    mutating func sessionArchiveVisibility() {
+        let archivedAt = Date(timeIntervalSince1970: 1_000)
+        let marker = SessionArchiveMarker(archivedAt: archivedAt)
+        let stale = SessionCandidate(
+            id: "archive-check",
+            agent: .codex,
+            title: "Archive check",
+            detail: "Working",
+            latestUserPrompt: "Same message",
+            latestConversationUpdatedAt: archivedAt,
+            phase: .working,
+            updatedAt: archivedAt,
+            evidence: .codexRollout
+        )
+        var newer = stale
+        newer.latestConversationUpdatedAt = archivedAt.addingTimeInterval(1)
+
+        expect(!marker.shouldRestore(for: stale), "archive ignores the conversation already shown")
+        expect(marker.shouldRestore(for: newer), "a newer message restores an archived session")
+        expect(
+            !marker.shouldRestore(for: AgentEvent(
+                sessionID: stale.id,
+                sequence: 1,
+                kind: .activity,
+                agent: .codex,
+                timestamp: archivedAt.addingTimeInterval(1)
+            )),
+            "tool activity does not restore an archived session"
+        )
+        expect(
+            !marker.shouldRestore(for: AgentEvent(
+                sessionID: stale.id,
+                sequence: 2,
+                kind: .sessionStarted,
+                agent: .codex,
+                timestamp: archivedAt.addingTimeInterval(1)
+            )),
+            "a lifecycle restart does not restore an archived session"
+        )
+        expect(
+            marker.shouldRestore(for: AgentEvent(
+                sessionID: stale.id,
+                sequence: 3,
+                kind: .permissionRequested,
+                agent: .codex,
+                timestamp: archivedAt.addingTimeInterval(1)
+            )),
+            "an approval request restores an archived session"
+        )
     }
 
     mutating func codexHookConfiguration() {

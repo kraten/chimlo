@@ -238,7 +238,10 @@ private struct SessionListView: View {
                                 seed: index,
                                 reduceMotion: model.accessibility.reduceMotion,
                                 increasedContrast: model.accessibility.increaseContrast,
-                                onOpen: session.jumpURL == nil ? nil : { model.open(session) }
+                                onOpen: session.jumpURL == nil ? nil : { model.open(session) },
+                                onArchive: session.needsAttention || session.isDemo
+                                    ? nil
+                                    : { model.archiveSession(session) }
                             )
                         }
                     }
@@ -306,6 +309,7 @@ struct SessionRow: View {
     let reduceMotion: Bool
     let increasedContrast: Bool
     var onOpen: (() -> Void)? = nil
+    var onArchive: (() -> Void)? = nil
     @State private var isHovering = false
 
     var body: some View {
@@ -316,26 +320,33 @@ struct SessionRow: View {
                 completionDetails
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilitySummary)
+        .accessibilityElement(children: .contain)
     }
 
     private var summaryCard: some View {
-        Group {
-            if let onOpen {
-                Button(action: onOpen) {
+        HStack(spacing: 0) {
+            Group {
+                if let onOpen {
+                    Button(action: onOpen) {
+                        rowContent
+                    }
+                    .buttonStyle(SessionMessageButtonStyle(
+                        isHovering: isHovering
+                    ))
+                    .accessibilityLabel(accessibilitySummary)
+                    .accessibilityHint("Returns to the originating session")
+                } else {
                     rowContent
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(accessibilitySummary)
                 }
-                .buttonStyle(SessionMessageButtonStyle(
-                    isHovering: isHovering
-                ))
-                .accessibilityHint("Returns to the originating session")
-            } else {
-                rowContent
-                    .background(cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
+            .frame(maxWidth: .infinity)
+
+            trailingControls
         }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .onHover { hovering in
             if reduceMotion {
                 isHovering = hovering
@@ -412,14 +423,39 @@ struct SessionRow: View {
                 }
             }
 
-            if onOpen != nil {
-                PixelJumpMark(color: ChimloTheme.mutedPaper)
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 62)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var trailingControls: some View {
+        HStack(spacing: 0) {
+            if let onArchive {
+                Button(action: onArchive) {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 26, height: 28)
+                }
+                .buttonStyle(SessionArchiveButtonStyle())
+                .help("Archive in Chimlo")
+                .accessibilityLabel("Archive \(session.displayTitle) in Chimlo")
+            }
+
+            if let onOpen {
+                Button(action: onOpen) {
+                    PixelJumpMark(color: ChimloTheme.mutedPaper)
+                        .frame(width: 26, height: 28)
+                }
+                .buttonStyle(.plain)
+                .help("Open source session")
+                .accessibilityLabel("Open \(session.displayTitle) in the source app")
+            }
+        }
+        .padding(.trailing, 6)
     }
 
     private var completionDetails: some View {
@@ -483,6 +519,16 @@ struct SessionRow: View {
         let prompt = session.latestUserPrompt.map { "User prompt: \($0)." } ?? ""
         let response = session.latestAgentResponse ?? session.detail
         return "\(session.agentName), \(session.displayTitle), \(session.mood.accessibilityDescription). \(prompt) Latest response: \(response)"
+    }
+}
+
+private struct SessionArchiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(
+                configuration.isPressed ? ChimloTheme.paper : ChimloTheme.mutedPaper
+            )
+            .contentShape(Rectangle())
     }
 }
 
