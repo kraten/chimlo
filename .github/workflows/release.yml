@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
@@ -36,7 +36,7 @@ jobs:
           zip -r Chimlo-${{ github.ref_name }}.zip Chimlo.app
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/Chimlo-${{ github.ref_name }}.zip
           generate_release_notes: true
