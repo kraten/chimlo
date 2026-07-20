@@ -324,7 +324,7 @@ struct SessionRow: View {
     }
 
     private var summaryCard: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 0) {
             Group {
                 if let onOpen {
                     Button(action: onOpen) {
@@ -455,6 +455,7 @@ struct SessionRow: View {
                 .accessibilityLabel("Open \(session.displayTitle) in the source app")
             }
         }
+        .padding(.top, 3)
         .padding(.trailing, 6)
     }
 
