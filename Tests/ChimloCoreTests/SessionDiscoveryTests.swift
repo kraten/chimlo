@@ -23,12 +23,16 @@ struct SessionDiscoveryTests {
         #expect(candidate.jumpURL?.absoluteString == "codex://threads/codex-1")
         #expect(candidate.latestUserPrompt == "Polish the expanded session row")
         #expect(candidate.latestAgentResponse == "Implemented the compact three-line layout.")
+        #expect(candidate.latestConversationUpdatedAt == Date(timeIntervalSince1970: 1_784_541_662))
 
-        let encoded = String(decoding: try JSONEncoder().encode(candidate), as: UTF8.self)
+        let data = try JSONEncoder().encode(candidate)
+        let encoded = String(decoding: data, as: UTF8.self)
         #expect(!encoded.contains("DO NOT RETAIN"))
         #expect(!encoded.contains("Polish the expanded session row"))
         #expect(!encoded.contains("Implemented the compact three-line layout."))
         #expect(!encoded.contains("rollout-codex-1"))
+        let restored = try JSONDecoder().decode(SessionCandidate.self, from: data)
+        #expect(restored.latestConversationUpdatedAt == nil)
     }
 
     @Test("Claude transcript exposes title and visible conversation previews")
@@ -49,6 +53,7 @@ struct SessionDiscoveryTests {
         #expect(candidate.title == "Polish Chimlo expanded UI")
         #expect(candidate.latestUserPrompt == "Polish the expanded session row")
         #expect(candidate.latestAgentResponse == "Implemented the compact three-line layout.")
+        #expect(candidate.latestConversationUpdatedAt == Date(timeIntervalSince1970: 1_784_541_602))
 
         let encoded = String(decoding: try JSONEncoder().encode(candidate), as: UTF8.self)
         #expect(!encoded.contains("Polish the expanded session row"))

@@ -32,6 +32,7 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
     public var jumpURL: URL?
     public var latestUserPrompt: String?
     public var latestAgentResponse: String?
+    public var latestConversationUpdatedAt: Date?
     public var phase: SessionPhase
     public var updatedAt: Date
     public var evidence: SessionEvidenceSource
@@ -48,6 +49,7 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         jumpURL: URL? = nil,
         latestUserPrompt: String? = nil,
         latestAgentResponse: String? = nil,
+        latestConversationUpdatedAt: Date? = nil,
         phase: SessionPhase,
         updatedAt: Date,
         evidence: SessionEvidenceSource
@@ -63,6 +65,7 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         self.jumpURL = jumpURL
         self.latestUserPrompt = latestUserPrompt
         self.latestAgentResponse = latestAgentResponse
+        self.latestConversationUpdatedAt = latestConversationUpdatedAt
         self.phase = phase
         self.updatedAt = updatedAt
         self.evidence = evidence
@@ -86,6 +89,7 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         jumpURL = try values.decodeIfPresent(URL.self, forKey: .jumpURL)
         latestUserPrompt = nil
         latestAgentResponse = nil
+        latestConversationUpdatedAt = nil
         phase = try values.decode(SessionPhase.self, forKey: .phase)
         updatedAt = try values.decode(Date.self, forKey: .updatedAt)
         evidence = try values.decode(SessionEvidenceSource.self, forKey: .evidence)
@@ -124,6 +128,7 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
     private var taskTitle: String?
     private var latestUserPrompt: String?
     private var latestAgentResponse: String?
+    private var latestConversationUpdatedAt: Date?
     private var phase: SessionPhase = .completed
     private var updatedAt: Date?
 
@@ -172,6 +177,7 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
             jumpURL: jumpURL,
             latestUserPrompt: latestUserPrompt,
             latestAgentResponse: latestAgentResponse,
+            latestConversationUpdatedAt: latestConversationUpdatedAt,
             phase: phase,
             updatedAt: updatedAt ?? fallbackUpdatedAt,
             evidence: evidence
@@ -189,18 +195,30 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
         }
         model = Self.prefer(line.payload?.model, over: model, maximumUTF8Bytes: 128)
 
-        updatedAt = Self.latest(updatedAt, Self.parseDate(line.timestamp ?? line.payload?.timestamp))
+        let lineTimestamp = Self.parseDate(line.timestamp ?? line.payload?.timestamp)
+        updatedAt = Self.latest(updatedAt, lineTimestamp)
 
         if line.type == "event_msg" {
             switch line.payload?.type?.lowercased() {
             case "user_message":
-                latestUserPrompt = Self.previewText(
+                if let prompt = Self.previewText(
                     line.payload?.message,
                     extractingCodexRequest: true
-                ) ?? latestUserPrompt
+                ) {
+                    latestUserPrompt = prompt
+                    latestConversationUpdatedAt = Self.latest(
+                        latestConversationUpdatedAt,
+                        lineTimestamp
+                    )
+                }
             case "agent_message":
-                latestAgentResponse = Self.previewText(line.payload?.message)
-                    ?? latestAgentResponse
+                if let response = Self.previewText(line.payload?.message) {
+                    latestAgentResponse = response
+                    latestConversationUpdatedAt = Self.latest(
+                        latestConversationUpdatedAt,
+                        lineTimestamp
+                    )
+                }
             default:
                 break
             }
@@ -223,23 +241,38 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
         sessionID = Self.prefer(line.sessionID, over: sessionID, maximumUTF8Bytes: 512)
         workingDirectory = Self.prefer(line.cwd, over: workingDirectory, maximumUTF8Bytes: 4_096)
         model = Self.prefer(line.message?.model, over: model, maximumUTF8Bytes: 128)
-        updatedAt = Self.latest(updatedAt, Self.parseDate(line.timestamp))
+        let lineTimestamp = Self.parseDate(line.timestamp)
+        updatedAt = Self.latest(updatedAt, lineTimestamp)
 
         switch line.type?.lowercased() {
         case "ai-title":
             taskTitle = Self.previewText(line.aiTitle) ?? taskTitle
         case "last-prompt":
-            latestUserPrompt = Self.previewText(line.lastPrompt) ?? latestUserPrompt
+            if let prompt = Self.previewText(line.lastPrompt) {
+                latestUserPrompt = prompt
+                latestConversationUpdatedAt = Self.latest(
+                    latestConversationUpdatedAt,
+                    lineTimestamp
+                )
+            }
         case "user":
-            if line.message?.role == "user" {
-                latestUserPrompt = Self.previewText(line.message?.content?.visibleText)
-                    ?? latestUserPrompt
+            if line.message?.role == "user",
+               let prompt = Self.previewText(line.message?.content?.visibleText) {
+                latestUserPrompt = prompt
+                latestConversationUpdatedAt = Self.latest(
+                    latestConversationUpdatedAt,
+                    lineTimestamp
+                )
             }
             phase = .working
         case "assistant":
-            if line.message?.role == "assistant" {
-                latestAgentResponse = Self.previewText(line.message?.content?.visibleText)
-                    ?? latestAgentResponse
+            if line.message?.role == "assistant",
+               let response = Self.previewText(line.message?.content?.visibleText) {
+                latestAgentResponse = response
+                latestConversationUpdatedAt = Self.latest(
+                    latestConversationUpdatedAt,
+                    lineTimestamp
+                )
             }
             phase = .working
         case "progress":

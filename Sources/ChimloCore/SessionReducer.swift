@@ -45,6 +45,10 @@ public struct SessionReducer: Sendable {
             existing.jumpURL = existing.jumpURL ?? candidate.jumpURL
             existing.latestUserPrompt = candidate.latestUserPrompt ?? existing.latestUserPrompt
             existing.latestAgentResponse = candidate.latestAgentResponse ?? existing.latestAgentResponse
+            if let latestConversationUpdatedAt = candidate.latestConversationUpdatedAt,
+               latestConversationUpdatedAt > (existing.latestConversationUpdatedAt ?? .distantPast) {
+                existing.latestConversationUpdatedAt = latestConversationUpdatedAt
+            }
             sessions[candidate.id] = existing
             return existing
         }
@@ -61,6 +65,7 @@ public struct SessionReducer: Sendable {
             jumpURL: candidate.jumpURL,
             latestUserPrompt: candidate.latestUserPrompt,
             latestAgentResponse: candidate.latestAgentResponse,
+            latestConversationUpdatedAt: candidate.latestConversationUpdatedAt,
             phase: candidate.phase,
             startedAt: candidate.updatedAt,
             updatedAt: candidate.updatedAt,
@@ -97,6 +102,7 @@ public struct SessionReducer: Sendable {
                 jumpURL: event.jumpURL ?? prior?.jumpURL,
                 latestUserPrompt: prior?.latestUserPrompt,
                 latestAgentResponse: prior?.latestAgentResponse,
+                latestConversationUpdatedAt: prior?.latestConversationUpdatedAt,
                 phase: .working,
                 pendingRequest: nil,
                 startedAt: prior?.startedAt ?? event.timestamp,
