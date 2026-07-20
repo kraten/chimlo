@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/kraten/chimlo/discussions
+    about: Ask questions, share ideas, and connect with other Chimlo users.
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/kraten/chimlo/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately. Do not open a public issue.
