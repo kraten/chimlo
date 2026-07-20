@@ -37,6 +37,16 @@ private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum SettingsAppearance {
+    static var detailBackground: Color {
+        Color(nsColor: .underPageBackgroundColor)
+    }
+
+    static var sidebarSeparator: Color {
+        Color(nsColor: .separatorColor)
+    }
+}
+
 struct ChimloSettingsView: View {
     @ObservedObject var model: ApplicationModel
     @State private var selectedTab: ChimloSettingsTab = .general
@@ -56,8 +66,13 @@ struct ChimloSettingsView: View {
             }
             .listStyle(.sidebar)
             .frame(width: 190)
-
-            Divider()
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(SettingsAppearance.sidebarSeparator)
+                    .frame(width: 1)
+                    .ignoresSafeArea(.container, edges: .top)
+                    .accessibilityHidden(true)
+            }
 
             SettingsDetailPane(title: selectedTab.title) {
                 switch selectedTab {
@@ -112,7 +127,7 @@ private struct SettingsDetailPane<Content: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(SettingsAppearance.detailBackground)
     }
 }
 
@@ -159,6 +174,8 @@ private struct GeneralSettingsPane: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(SettingsAppearance.detailBackground)
     }
 }
 
@@ -209,6 +226,8 @@ private struct AgentSettingsPane: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(SettingsAppearance.detailBackground)
     }
 
     private func connectionRow(
@@ -304,6 +323,8 @@ private struct AccessibilitySettingsPane: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(SettingsAppearance.detailBackground)
     }
 
     private func accessibilityRow(_ title: String, enabled: Bool) -> some View {
@@ -355,7 +376,7 @@ private struct AboutSettingsPane: View {
                     }
 
                     LabeledContent("Implementation") {
-                        Text("Original and open source")
+                        Text("Open source")
                             .foregroundStyle(.secondary)
                     }
                 } header: {
@@ -363,6 +384,8 @@ private struct AboutSettingsPane: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(SettingsAppearance.detailBackground)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }

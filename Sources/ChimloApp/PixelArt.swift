@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AvatarMood: String, CaseIterable, Sendable {
@@ -83,6 +84,24 @@ struct PixelAvatar: View {
 }
 
 private enum AvatarSprites {
+    // Keep the original character palette independent from the island theme.
+    // UI color changes should never silently redesign the avatar artwork.
+    private enum Palette {
+        static let paper = Color(
+            nsColor: NSColor(calibratedRed: 0.94, green: 0.925, blue: 0.87, alpha: 1)
+        )
+        static let ink = Color(nsColor: NSColor(calibratedWhite: 0.035, alpha: 1))
+        static let amber = Color(
+            nsColor: NSColor(calibratedRed: 0.83, green: 0.64, blue: 0.31, alpha: 1)
+        )
+        static let moss = Color(
+            nsColor: NSColor(calibratedRed: 0.48, green: 0.62, blue: 0.42, alpha: 1)
+        )
+        static let clay = Color(
+            nsColor: NSColor(calibratedRed: 0.68, green: 0.36, blue: 0.29, alpha: 1)
+        )
+    }
+
     static func sprite(mood: AvatarMood, frame: Int, seed: Int) -> [[Character]] {
         let frames: [String]
         switch mood {
@@ -250,12 +269,12 @@ private enum AvatarSprites {
 
     static func color(for value: Character, seed: Int) -> Color {
         switch value {
-        case "K": ChimloTheme.paper
-        case "W": ChimloTheme.ink
-        case "A": seed.isMultiple(of: 2) ? ChimloTheme.amber : ChimloTheme.moss
-        case "a": ChimloTheme.clay
-        case "B": seed.isMultiple(of: 3) ? ChimloTheme.moss : ChimloTheme.amber
-        case "T": ChimloTheme.paper
+        case "K": Palette.paper
+        case "W": Palette.ink
+        case "A": seed.isMultiple(of: 2) ? Palette.amber : Palette.moss
+        case "a": Palette.clay
+        case "B": seed.isMultiple(of: 3) ? Palette.moss : Palette.amber
+        case "T": Palette.paper
         default: .clear
         }
     }
