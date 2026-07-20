@@ -63,17 +63,21 @@ private struct CheckSuite {
 
         expect(layout.compactHeight == 32, "compact island fits the notch height")
         expect(layout.compactWidth == 249, "compact island provides two 32-point activity wings")
+        expect(
+            abs(layout.expandedWidth - 518.4) < 0.01,
+            "expanded island uses three-tenths of the display width"
+        )
         expect(layout.expandedContentTopInset == 32, "expanded content clears the camera housing")
         expect(layout.expandedNeckWidth == 249, "expanded panel grows from the compact notch neck")
         expect(layout.cameraHousingWidth == 185, "compact center matches the physical camera housing")
         expect(layout.activityWingWidth == 32, "compact activity wings remain symmetric")
 
         let expandedSilhouette = ExpandedIslandSilhouette(
-            width: 416
+            width: layout.expandedWidth
         )
         expect(
             expandedSilhouette.topLeftX == 0
-                && expandedSilhouette.topRightX == 416
+                && expandedSilhouette.topRightX == layout.expandedWidth
                 && expandedSilhouette.topY == 0,
             "expanded surface covers its full width from the camera band"
         )
@@ -109,6 +113,25 @@ private struct CheckSuite {
                 hasBlockingDecision: false
             ),
             "onboarding and compact modes never auto-collapse"
+        )
+        expect(
+            IslandCollapsePolicy.isNewCompletion(
+                wasArmedForCompletion: true,
+                eventKind: .completed
+            ),
+            "working to completed presents the completion panel"
+        )
+        expect(
+            !IslandCollapsePolicy.isNewCompletion(
+                wasArmedForCompletion: false,
+                eventKind: .completed
+            ),
+            "repeated completion does not replay feedback"
+        )
+        expect(
+            IslandCollapsePolicy.completionHoldMilliseconds
+                > IslandCollapsePolicy.hoverDelayMilliseconds,
+            "completion remains readable longer than hover expansion"
         )
     }
 
@@ -191,28 +214,38 @@ private struct CheckSuite {
         codex.consume(line: Data(
             #"{"type":"event_msg","timestamp":"2026-07-20T13:01:00.456Z","payload":{"type":"task_started","tool_input":{"command":"DO NOT RETAIN CODEX TOOL"}}}"#.utf8
         ))
+        codex.consume(line: Data(
+            #"{"type":"event_msg","timestamp":"2026-07-20T13:01:01.456Z","payload":{"type":"user_message","message":"Polish the expanded session row"}}"#.utf8
+        ))
+        codex.consume(line: Data(
+            #"{"type":"event_msg","timestamp":"2026-07-20T13:01:02.456Z","payload":{"type":"agent_message","message":"Implemented the compact three-line layout."}}"#.utf8
+        ))
         let codexCandidate = codex.candidate(
             transcriptPath: "/private/codex-rollout.jsonl",
             fallbackUpdatedAt: .distantPast
         )
         expect(codexCandidate?.phase == .working, "Codex rollout lifecycle maps to working")
         expect(codexCandidate?.updatedAt != .distantPast, "fractional Codex timestamps are parsed")
+        expect(codexCandidate?.latestUserPrompt == "Polish the expanded session row", "Codex user prompt is projected")
+        expect(codexCandidate?.latestAgentResponse == "Implemented the compact three-line layout.", "Codex response is projected")
 
         var claude = PrivacySafeSessionMetadataScanner(provider: .claude)
         claude.consume(line: Data(
-            #"{"sessionId":"claude-transcript-1","cwd":"/Users/example/Projects/chimlo","timestamp":"2026-07-20T13:02:00.789Z","type":"assistant","message":{"model":"claude-local","content":"DO NOT RETAIN CLAUDE CONTENT"},"toolUseResult":"DO NOT RETAIN CLAUDE TOOL"}"#.utf8
+            #"{"sessionId":"claude-transcript-1","cwd":"/Users/example/Projects/chimlo","timestamp":"2026-07-20T13:02:00.789Z","type":"assistant","message":{"role":"assistant","model":"claude-local","content":"Implemented the compact three-line layout."},"toolUseResult":"DO NOT RETAIN CLAUDE TOOL"}"#.utf8
         ))
         let claudeCandidate = claude.candidate(
             transcriptPath: "/private/claude-transcript.jsonl",
             fallbackUpdatedAt: .distantPast
         )
         expect(claudeCandidate?.phase == .working, "Claude transcript lifecycle maps to working")
+        expect(claudeCandidate?.latestAgentResponse == "Implemented the compact three-line layout.", "Claude response is projected")
 
         let encoded = [codexCandidate, claudeCandidate].compactMap { $0 }
             .compactMap { try? JSONEncoder().encode($0) }
             .map { String(decoding: $0, as: UTF8.self) }
             .joined()
-        expect(!encoded.contains("DO NOT RETAIN"), "transcript discovery discards prompt and tool contents")
+        expect(!encoded.contains("Implemented the compact three-line layout."), "conversation previews are not persisted")
+        expect(!encoded.contains("DO NOT RETAIN"), "transcript discovery discards tool contents")
         expect(!encoded.contains("transcript.jsonl"), "transcript discovery does not persist transcript paths")
     }
 

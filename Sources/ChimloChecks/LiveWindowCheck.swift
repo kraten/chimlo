@@ -45,7 +45,7 @@ enum LiveWindowTransitionCheck {
         let distinctWidths = Set(frames.map { Int(($0.bounds.width * 2).rounded()) })
         let final = frames.last?.bounds ?? initial.bounds
         let expanded = final.width > initial.bounds.width
-        let expectedWidth: CGFloat = expanded ? 404 : display.compactWidth
+        let expectedWidth: CGFloat = expanded ? display.expandedWidth : display.compactWidth
 
         var failures: [String] = []
         if centerDeltas.max() ?? .infinity > 1.5 {
@@ -109,6 +109,7 @@ private struct NotchedDisplay {
     let bounds: CGRect
     let cameraCenter: CGFloat
     let compactWidth: CGFloat
+    let expandedWidth: CGFloat
 
     static var current: NotchedDisplay? {
         guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }),
@@ -122,7 +123,8 @@ private struct NotchedDisplay {
         return NotchedDisplay(
             bounds: bounds,
             cameraCenter: bounds.minX + appKitCenter - screen.frame.minX,
-            compactWidth: rightArea.minX - leftArea.maxX + 64
+            compactWidth: rightArea.minX - leftArea.maxX + 64,
+            expandedWidth: screen.frame.width * 0.3
         )
     }
 }

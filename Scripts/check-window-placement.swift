@@ -72,7 +72,7 @@ case .any:
 case .compact:
     rightArea.minX - leftArea.maxX + 64
 case .expanded:
-    404
+    screen.frame.width * 0.3
 }
 let widthDelta = expectedWidth.map { abs(actual.bounds.width - $0) }
 
