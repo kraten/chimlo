@@ -1,0 +1,90 @@
+import Foundation
+import Testing
+@testable import ChimloCore
+
+@Suite("Codex hook configuration")
+struct HookConfigurationTests {
+    private let helperPath = "/Applications/Chimlo.app/Contents/Helpers/chimlo"
+
+    @Test("Merge preserves unrelated hooks and becomes current")
+    func mergePreservesUnrelatedHooks() throws {
+        let existing = Data(#"{"description":"keep me","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"existing-observer"}]}],"Unrelated":[{"hooks":[{"type":"command","command":"leave-this-alone"}]}]}}"#.utf8)
+
+        let plan = try CodexHookConfiguration.merging(existingData: existing, helperPath: helperPath)
+        #expect(plan.changed)
+        #expect(try CodexHookConfiguration.installationState(in: plan.data, helperPath: helperPath) == .current)
+
+        let root = try #require(JSONSerialization.jsonObject(with: plan.data) as? [String: Any])
+        #expect(root["description"] as? String == "keep me")
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let unrelated = try #require(hooks["Unrelated"] as? [[String: Any]])
+        let observers = try #require(unrelated.first?["hooks"] as? [[String: Any]])
+        #expect(observers.first?["command"] as? String == "leave-this-alone")
+    }
+
+    @Test("Merge is idempotent")
+    func mergeIsIdempotent() throws {
+        let first = try CodexHookConfiguration.merging(existingData: nil, helperPath: helperPath)
+        let second = try CodexHookConfiguration.merging(existingData: first.data, helperPath: helperPath)
+        #expect(first.changed)
+        #expect(!second.changed)
+        #expect(first.data == second.data)
+    }
+
+    @Test("Moving the app produces a repair plan")
+    func movedHelperNeedsRepair() throws {
+        let oldPath = "/tmp/Chimlo.app/Contents/Helpers/chimlo"
+        let installed = try CodexHookConfiguration.merging(existingData: nil, helperPath: oldPath)
+        #expect(try CodexHookConfiguration.installationState(in: installed.data, helperPath: helperPath) == .needsRepair)
+
+        let repaired = try CodexHookConfiguration.merging(existingData: installed.data, helperPath: helperPath)
+        #expect(repaired.changed)
+        #expect(try CodexHookConfiguration.installationState(in: repaired.data, helperPath: helperPath) == .current)
+        #expect(!String(decoding: repaired.data, as: UTF8.self).contains(oldPath))
+    }
+
+    @Test("Removal is marker scoped")
+    func removalIsMarkerScoped() throws {
+        let existing = Data(#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"existing-observer"}]}]}}"#.utf8)
+        let installed = try CodexHookConfiguration.merging(existingData: existing, helperPath: helperPath)
+        let removed = try CodexHookConfiguration.removing(existingData: installed.data)
+
+        #expect(removed.changed)
+        #expect(try CodexHookConfiguration.installationState(in: removed.data, helperPath: helperPath) == .missing)
+        let text = String(decoding: removed.data, as: UTF8.self)
+        #expect(text.contains("existing-observer"))
+        #expect(!text.contains(CodexHookConfiguration.marker))
+    }
+}
+
+@Suite("Claude hook configuration")
+struct ClaudeHookConfigurationTests {
+    private let helperPath = "/Users/me/Library/Application Support/Chimlo/bin/chimlo"
+
+    @Test("Merge preserves unrelated Claude settings and hooks")
+    func mergePreservesUnrelatedSettings() throws {
+        let existing = Data(#"{"theme":"dark","hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"my-observer"}]}],"Unrelated":[{"hooks":[{"type":"command","command":"leave-this-alone"}]}]}}"#.utf8)
+        let plan = try ClaudeHookConfiguration.merging(existingData: existing, helperPath: helperPath)
+
+        #expect(plan.changed)
+        #expect(try ClaudeHookConfiguration.installationState(in: plan.data, helperPath: helperPath) == .current)
+        let root = try #require(JSONSerialization.jsonObject(with: plan.data) as? [String: Any])
+        #expect(root["theme"] as? String == "dark")
+        let text = String(decoding: plan.data, as: UTF8.self)
+        #expect(text.contains("my-observer"))
+        #expect(text.contains("leave-this-alone"))
+    }
+
+    @Test("Claude merge is idempotent and removal is marker scoped")
+    func mergeAndRemove() throws {
+        let first = try ClaudeHookConfiguration.merging(existingData: nil, helperPath: helperPath)
+        let second = try ClaudeHookConfiguration.merging(existingData: first.data, helperPath: helperPath)
+        #expect(!second.changed)
+        #expect(second.data == first.data)
+
+        let removed = try ClaudeHookConfiguration.removing(existingData: first.data)
+        #expect(removed.changed)
+        #expect(try ClaudeHookConfiguration.installationState(in: removed.data, helperPath: helperPath) == .missing)
+        #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.marker))
+    }
+}
