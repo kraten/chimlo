@@ -17,11 +17,9 @@ public enum SessionTitleKind: Int, Codable, Comparable, Sendable {
     }
 }
 
-/// The privacy-safe vocabulary shared by transcript discovery, process
-/// reconciliation, persistence, and the Codex app-server adapter.
-///
-/// This deliberately excludes prompt text, assistant text, tool arguments,
-/// tool results, environment variables, and file contents.
+/// The local-session vocabulary shared by transcript discovery, process
+/// reconciliation, persistence, and the Codex app-server adapter. Prompt and
+/// response previews are transient: Chimlo's registry deliberately omits them.
 public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let agent: AgentKind
@@ -32,6 +30,8 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
     public var terminal: String?
     public var projectPath: String?
     public var jumpURL: URL?
+    public var latestUserPrompt: String?
+    public var latestAgentResponse: String?
     public var phase: SessionPhase
     public var updatedAt: Date
     public var evidence: SessionEvidenceSource
@@ -46,6 +46,8 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         terminal: String? = nil,
         projectPath: String? = nil,
         jumpURL: URL? = nil,
+        latestUserPrompt: String? = nil,
+        latestAgentResponse: String? = nil,
         phase: SessionPhase,
         updatedAt: Date,
         evidence: SessionEvidenceSource
@@ -59,6 +61,8 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         self.terminal = terminal
         self.projectPath = projectPath
         self.jumpURL = jumpURL
+        self.latestUserPrompt = latestUserPrompt
+        self.latestAgentResponse = latestAgentResponse
         self.phase = phase
         self.updatedAt = updatedAt
         self.evidence = evidence
@@ -80,6 +84,8 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         terminal = try values.decodeIfPresent(String.self, forKey: .terminal)
         projectPath = try values.decodeIfPresent(String.self, forKey: .projectPath)
         jumpURL = try values.decodeIfPresent(URL.self, forKey: .jumpURL)
+        latestUserPrompt = nil
+        latestAgentResponse = nil
         phase = try values.decode(SessionPhase.self, forKey: .phase)
         updatedAt = try values.decode(Date.self, forKey: .updatedAt)
         evidence = try values.decode(SessionEvidenceSource.self, forKey: .evidence)
@@ -102,8 +108,9 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// Streams provider JSONL into a small local-session candidate. Unknown keys
-/// are ignored by Codable and never enter the returned value.
+/// Streams provider JSONL into a bounded local-session candidate. Only the
+/// visible user prompt and agent response are read; reasoning, tools, tool
+/// results, environment values, and file contents remain excluded.
 public struct PrivacySafeSessionMetadataScanner: Sendable {
     public enum Provider: Sendable {
         case codex
@@ -114,6 +121,9 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
     private var sessionID: String?
     private var workingDirectory: String?
     private var model: String?
+    private var taskTitle: String?
+    private var latestUserPrompt: String?
+    private var latestAgentResponse: String?
     private var phase: SessionPhase = .completed
     private var updatedAt: Date?
 
@@ -150,14 +160,18 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
             ? URL(string: "codex://threads/\(sessionID)")
             : nil
 
+        let title = taskTitle ?? safeWorkspace
         return SessionCandidate(
             id: sessionID,
             agent: agent,
-            title: safeWorkspace,
+            title: title,
+            titleKind: taskTitle == nil ? .workspace : .task,
             detail: Self.detail(for: phase, displayName: displayName),
             model: Self.bounded(model, maximumUTF8Bytes: 128),
             projectPath: workingDirectory,
             jumpURL: jumpURL,
+            latestUserPrompt: latestUserPrompt,
+            latestAgentResponse: latestAgentResponse,
             phase: phase,
             updatedAt: updatedAt ?? fallbackUpdatedAt,
             evidence: evidence
@@ -177,6 +191,21 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
 
         updatedAt = Self.latest(updatedAt, Self.parseDate(line.timestamp ?? line.payload?.timestamp))
 
+        if line.type == "event_msg" {
+            switch line.payload?.type?.lowercased() {
+            case "user_message":
+                latestUserPrompt = Self.previewText(
+                    line.payload?.message,
+                    extractingCodexRequest: true
+                ) ?? latestUserPrompt
+            case "agent_message":
+                latestAgentResponse = Self.previewText(line.payload?.message)
+                    ?? latestAgentResponse
+            default:
+                break
+            }
+        }
+
         guard let lifecycle = line.payload?.type?.lowercased() else { return }
         if Self.runningLifecycleNames.contains(lifecycle) {
             phase = .working
@@ -189,6 +218,7 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
 
     private mutating func consumeClaude(line data: Data) {
         guard let line = try? JSONDecoder().decode(ClaudeLine.self, from: data) else { return }
+        guard line.isSidechain != true else { return }
 
         sessionID = Self.prefer(line.sessionID, over: sessionID, maximumUTF8Bytes: 512)
         workingDirectory = Self.prefer(line.cwd, over: workingDirectory, maximumUTF8Bytes: 4_096)
@@ -196,7 +226,23 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
         updatedAt = Self.latest(updatedAt, Self.parseDate(line.timestamp))
 
         switch line.type?.lowercased() {
-        case "user", "assistant", "progress":
+        case "ai-title":
+            taskTitle = Self.previewText(line.aiTitle) ?? taskTitle
+        case "last-prompt":
+            latestUserPrompt = Self.previewText(line.lastPrompt) ?? latestUserPrompt
+        case "user":
+            if line.message?.role == "user" {
+                latestUserPrompt = Self.previewText(line.message?.content?.visibleText)
+                    ?? latestUserPrompt
+            }
+            phase = .working
+        case "assistant":
+            if line.message?.role == "assistant" {
+                latestAgentResponse = Self.previewText(line.message?.content?.visibleText)
+                    ?? latestAgentResponse
+            }
+            phase = .working
+        case "progress":
             phase = .working
         case "result", "summary":
             phase = .completed
@@ -258,6 +304,28 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
         return trimmed
     }
 
+    private static func previewText(
+        _ value: String?,
+        extractingCodexRequest: Bool = false
+    ) -> String? {
+        guard var value else { return nil }
+        if extractingCodexRequest {
+            for marker in ["## My request for Codex:", "# My request for Codex:"] {
+                guard let range = value.range(of: marker) else { continue }
+                value = String(value[range.upperBound...])
+                break
+            }
+        }
+
+        let normalized = value
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !normalized.isEmpty else { return nil }
+        let maximumCharacters = 2_000
+        guard normalized.count > maximumCharacters else { return normalized }
+        return String(normalized.prefix(maximumCharacters)).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
     private struct CodexLine: Decodable {
         let type: String?
         let timestamp: String?
@@ -269,6 +337,7 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
             let model: String?
             let timestamp: String?
             let type: String?
+            let message: String?
         }
     }
 
@@ -278,9 +347,45 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
         let timestamp: String?
         let type: String?
         let message: Message?
+        let aiTitle: String?
+        let lastPrompt: String?
+        let isSidechain: Bool?
 
         struct Message: Decodable {
             let model: String?
+            let role: String?
+            let content: Content?
+        }
+
+        enum Content: Decodable {
+            case text(String)
+            case blocks([Block])
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let text = try? container.decode(String.self) {
+                    self = .text(text)
+                } else {
+                    self = .blocks(try container.decode([Block].self))
+                }
+            }
+
+            var visibleText: String? {
+                switch self {
+                case let .text(text):
+                    text
+                case let .blocks(blocks):
+                    blocks
+                        .filter { $0.type == "text" }
+                        .compactMap(\.text)
+                        .joined(separator: "\n")
+                }
+            }
+        }
+
+        struct Block: Decodable {
+            let type: String?
+            let text: String?
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -289,6 +394,9 @@ public struct PrivacySafeSessionMetadataScanner: Sendable {
             case timestamp
             case type
             case message
+            case aiTitle
+            case lastPrompt
+            case isSidechain
         }
     }
 }

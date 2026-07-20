@@ -43,6 +43,8 @@ public struct SessionReducer: Sendable {
             existing.terminal = existing.terminal ?? candidate.terminal
             existing.projectPath = existing.projectPath ?? candidate.projectPath
             existing.jumpURL = existing.jumpURL ?? candidate.jumpURL
+            existing.latestUserPrompt = candidate.latestUserPrompt ?? existing.latestUserPrompt
+            existing.latestAgentResponse = candidate.latestAgentResponse ?? existing.latestAgentResponse
             sessions[candidate.id] = existing
             return existing
         }
@@ -57,6 +59,8 @@ public struct SessionReducer: Sendable {
             terminal: candidate.terminal,
             projectPath: candidate.projectPath,
             jumpURL: candidate.jumpURL,
+            latestUserPrompt: candidate.latestUserPrompt,
+            latestAgentResponse: candidate.latestAgentResponse,
             phase: candidate.phase,
             startedAt: candidate.updatedAt,
             updatedAt: candidate.updatedAt,
@@ -91,6 +95,8 @@ public struct SessionReducer: Sendable {
                 terminal: event.terminal ?? prior?.terminal,
                 projectPath: event.projectPath ?? prior?.projectPath,
                 jumpURL: event.jumpURL ?? prior?.jumpURL,
+                latestUserPrompt: prior?.latestUserPrompt,
+                latestAgentResponse: prior?.latestAgentResponse,
                 phase: .working,
                 pendingRequest: nil,
                 startedAt: prior?.startedAt ?? event.timestamp,

@@ -143,6 +143,8 @@ public struct AgentSession: Codable, Equatable, Sendable, Identifiable {
     public var terminal: String?
     public var projectPath: String?
     public var jumpURL: URL?
+    public var latestUserPrompt: String?
+    public var latestAgentResponse: String?
     public var phase: SessionPhase
     public var pendingRequest: PendingRequest?
     public var startedAt: Date
@@ -159,6 +161,8 @@ public struct AgentSession: Codable, Equatable, Sendable, Identifiable {
         terminal: String? = nil,
         projectPath: String? = nil,
         jumpURL: URL? = nil,
+        latestUserPrompt: String? = nil,
+        latestAgentResponse: String? = nil,
         phase: SessionPhase = .working,
         pendingRequest: PendingRequest? = nil,
         startedAt: Date,
@@ -174,6 +178,8 @@ public struct AgentSession: Codable, Equatable, Sendable, Identifiable {
         self.terminal = terminal
         self.projectPath = projectPath
         self.jumpURL = jumpURL
+        self.latestUserPrompt = latestUserPrompt
+        self.latestAgentResponse = latestAgentResponse
         self.phase = phase
         self.pendingRequest = pendingRequest
         self.startedAt = startedAt
