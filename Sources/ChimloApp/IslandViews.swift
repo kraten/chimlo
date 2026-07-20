@@ -20,7 +20,7 @@ struct IslandRootView: View {
                         ExpandedStatusBand(model: model, openSettings: openSettings)
                     }
                     SessionListView(model: model)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 16)
                         .padding(.top, model.islandLayout.expandedContentTopInset + 2)
                         .padding(.bottom, 10)
                         .frame(width: model.panelSize.width)
@@ -72,19 +72,11 @@ private struct ExpandedStatusBand: View {
             let wingWidth = max(0, (geometry.size.width - cameraWidth) / 2)
 
             HStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    PixelAvatar(
-                        mood: model.activeMood,
-                        seed: model.sessions.first?.id.hashValue ?? 0,
-                        size: 17,
-                        reduceMotion: model.accessibility.reduceMotion
-                    )
-                    PixelText(text: "CHIMLO", pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
-                }
-                .padding(.leading, 10)
-                .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
-                .clipped()
-                .accessibilityHidden(true)
+                PixelText(text: "CHIMLO", pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+                    .padding(.leading, 10)
+                    .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
+                    .clipped()
+                    .accessibilityHidden(true)
 
                 Color.clear
                     .frame(width: cameraWidth, height: geometry.size.height)
@@ -210,7 +202,7 @@ private struct CompactIslandView: View {
     private var compactCountColor: Color {
         if model.pendingDecision != nil { return ChimloTheme.paper }
         if model.sessions.contains(where: { $0.mood == .failed }) { return ChimloTheme.clayText }
-        if model.sessions.contains(where: { $0.mood == .working }) { return ChimloTheme.amber }
+        if model.sessions.contains(where: { $0.mood == .working }) { return ChimloTheme.liveGreen }
         return ChimloTheme.quietPaper
     }
 
@@ -226,21 +218,6 @@ private struct SessionListView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Local agent activity")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ChimloTheme.paper)
-                    .lineLimit(1)
-                Spacer()
-                HStack(spacing: 5) {
-                    ConnectionMark(isConnected: model.isReceivingAgentEvents)
-                    Text(headerContext)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(ChimloTheme.quietPaper)
-                        .lineLimit(1)
-                }
-            }
-
             if model.sessions.isEmpty {
                 VStack(spacing: 8) {
                     if let decision = model.pendingDecision {
@@ -268,28 +245,7 @@ private struct SessionListView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-
         }
-    }
-
-    private var headerContext: String {
-        if model.sessions.count > 1 { return "\(model.sessions.count) sessions" }
-        if let session = model.sessions.first { return session.agentName }
-        return model.connectionSummary
-    }
-}
-
-private struct ConnectionMark: View {
-    let isConnected: Bool
-
-    var body: some View {
-        Canvas { context, _ in
-            let color = isConnected ? ChimloTheme.moss : ChimloTheme.clayText
-            context.fill(Path(CGRect(x: 1, y: 1, width: 4, height: 4)), with: .color(color))
-            context.fill(Path(CGRect(x: 5, y: 2, width: 1, height: 2)), with: .color(color.opacity(0.7)))
-        }
-        .frame(width: 7, height: 6)
-        .accessibilityHidden(true)
     }
 }
 
@@ -350,89 +306,218 @@ struct SessionRow: View {
     let reduceMotion: Bool
     let increasedContrast: Bool
     var onOpen: (() -> Void)? = nil
+    @State private var isHovering = false
 
     var body: some View {
+        VStack(spacing: 8) {
+            summaryCard
+
+            if session.showsCompletedConversation {
+                completionDetails
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var summaryCard: some View {
         Group {
             if let onOpen {
                 Button(action: onOpen) {
                     rowContent
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SessionMessageButtonStyle(
+                    isHovering: isHovering
+                ))
                 .accessibilityHint("Returns to the originating session")
             } else {
                 rowContent
+                    .background(cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(session.agentName), \(session.title), \(session.mood.accessibilityDescription), \(session.detail)")
+        .onHover { hovering in
+            if reduceMotion {
+                isHovering = hovering
+            } else {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    isHovering = hovering
+                }
+            }
+        }
     }
 
     private var rowContent: some View {
-        HStack(spacing: 10) {
-            PixelAvatar(mood: session.mood, seed: seed, size: 32, reduceMotion: reduceMotion)
+        HStack(spacing: 11) {
+            PixelAvatar(mood: session.mood, seed: seed, size: 34, reduceMotion: reduceMotion)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(session.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChimloTheme.paper)
-                    .lineLimit(1)
-                Text(metadata)
-                    .font(.system(size: 11))
-                    .foregroundStyle(ChimloTheme.quietPaper)
-                    .lineLimit(1)
-            }
+                HStack(spacing: 5) {
+                    Text(session.displayTitle)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ChimloTheme.paper)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-            Spacer(minLength: 8)
+                    Spacer(minLength: 6)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    HStack(spacing: 5) {
-                        Text(session.elapsedText)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(ChimloTheme.quietPaper)
-                            .monospacedDigit()
-                        if onOpen != nil {
-                            PixelJumpMark(color: stateColor)
-                        }
+                    SessionMetadataBadge(
+                        text: session.agentName,
+                        foreground: providerColor,
+                        background: providerColor.opacity(0.15)
+                    )
+
+                    if let model = session.model, !model.isEmpty {
+                        SessionMetadataBadge(text: model)
+                    }
+
+                    if let terminal = session.terminal, !terminal.isEmpty {
+                        SessionMetadataBadge(text: terminal)
                     }
                 }
-                Text(stateLabel.capitalized)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(stateColor)
+
+                if let prompt = session.latestUserPrompt {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("You:")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ChimloTheme.quietPaper)
+                        Text(prompt)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(ChimloTheme.quietPaper)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        if session.isDemo {
+                            Text("Preview")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(ChimloTheme.mutedPaper)
+                        }
+                    }
+                } else {
+                    Text(session.detail)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .lineLimit(1)
+                }
+
+                if let response = session.latestAgentResponse {
+                    Text(response)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .lineLimit(1)
+                } else if session.latestUserPrompt != nil {
+                    Text(session.detail)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .lineLimit(1)
+                }
+            }
+
+            if onOpen != nil {
+                PixelJumpMark(color: ChimloTheme.mutedPaper)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(ChimloTheme.raisedSurface(increasedContrast: increasedContrast))
-        .clipShape(SteppedPanelShape())
+        .padding(.vertical, 8)
+        .frame(minHeight: 62)
+        .contentShape(Rectangle())
     }
 
-    private var metadata: String {
-        var parts = [session.agentName]
-        if let model = session.model, !model.isEmpty { parts.append(model) }
-        parts.append(session.detail)
-        if session.isDemo { parts.append("Preview") }
-        return parts.joined(separator: " · ")
-    }
+    private var completionDetails: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("You:")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ChimloTheme.mutedPaper)
 
-    private var stateLabel: String {
-        switch session.mood {
-        case .idle: "IDLE"
-        case .working: "WORK"
-        case .waiting: "WAIT"
-        case .success: "DONE"
-        case .failed: "STOP"
+                Text(session.latestUserPrompt ?? "")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ChimloTheme.quietPaper)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                Text("Done")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(ChimloTheme.mutedPaper)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ChimloTheme.selectedInk)
+
+            Text(session.latestAgentResponse ?? "")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(ChimloTheme.quietPaper)
+                .lineSpacing(2)
+                .lineLimit(6)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(ChimloTheme.raisedInk)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(
+                    increasedContrast ? ChimloTheme.quietPaper : ChimloTheme.selectedInk,
+                    lineWidth: 1
+                )
         }
     }
 
-    private var stateColor: Color {
-        switch session.mood {
-        case .idle: ChimloTheme.quietPaper
-        case .working: ChimloTheme.amber
-        case .waiting: ChimloTheme.paper
-        case .success: ChimloTheme.moss
-        case .failed: ChimloTheme.clayText
-        }
+    private var cardBackground: Color {
+        isHovering
+            ? ChimloTheme.selectedInk
+            : .clear
+    }
+
+    private var providerColor: Color {
+        session.agentName.localizedCaseInsensitiveContains("claude")
+            ? ChimloTheme.providerOrange
+            : ChimloTheme.providerBlue
+    }
+
+    private var accessibilitySummary: String {
+        let prompt = session.latestUserPrompt.map { "User prompt: \($0)." } ?? ""
+        let response = session.latestAgentResponse ?? session.detail
+        return "\(session.agentName), \(session.displayTitle), \(session.mood.accessibilityDescription). \(prompt) Latest response: \(response)"
+    }
+}
+
+private struct SessionMessageButtonStyle: ButtonStyle {
+    let isHovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(background(isPressed: configuration.isPressed))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private func background(isPressed: Bool) -> Color {
+        if isPressed { return ChimloTheme.badgeInk }
+        if isHovering { return ChimloTheme.selectedInk }
+        return .clear
+    }
+}
+
+private struct SessionMetadataBadge: View {
+    let text: String
+    var foreground = ChimloTheme.quietPaper
+    var background = ChimloTheme.badgeInk
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .monospacedDigit()
+            .padding(.horizontal, 6)
+            .frame(height: 18)
+            .fixedSize(horizontal: true, vertical: false)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 

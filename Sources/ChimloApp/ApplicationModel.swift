@@ -11,19 +11,88 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     var title: String
     var detail: String
     var mood: AvatarMood
-    var startedAt: Date
     var isDemo: Bool
     var needsAttention: Bool
     var terminal: String?
     var projectPath: String?
     var jumpURL: URL?
     var model: String?
+    var latestUserPrompt: String?
+    var latestAgentResponse: String?
+    var latestResponseReceivedAt: Date?
 
-    var elapsedText: String {
-        let seconds = max(0, Int(Date().timeIntervalSince(startedAt)))
-        if seconds < 60 { return "\(seconds)s" }
-        if seconds < 3_600 { return "\(seconds / 60)m" }
-        return "\(seconds / 3_600)h"
+    var displayTitle: String {
+        guard let projectPath else { return title }
+        let workspace = URL(fileURLWithPath: projectPath).lastPathComponent
+        guard !workspace.isEmpty,
+              title.localizedCaseInsensitiveCompare(workspace) != .orderedSame,
+              !title.localizedCaseInsensitiveContains("\(workspace) ·") else {
+            return title
+        }
+        return "\(workspace) · \(title)"
+    }
+
+    var showsCompletedConversation: Bool {
+        guard let latestResponseReceivedAt else { return false }
+        return mood == .success
+            && latestUserPrompt != nil
+            && latestAgentResponse != nil
+            && latestResponseReceivedAt >= Date.now.addingTimeInterval(
+                -IslandCollapsePolicy.completionDetailLifetimeSeconds
+            )
+    }
+
+    func preferredRowHeight(responseTextWidth: CGFloat) -> CGFloat {
+        guard showsCompletedConversation,
+              let latestUserPrompt,
+              let latestAgentResponse else { return 70 }
+
+        let promptFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let promptLabelFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        let doneFont = NSFont.systemFont(ofSize: 10, weight: .semibold)
+        let promptFixedWidth = ("You:" as NSString).size(withAttributes: [.font: promptLabelFont]).width
+            + ("Done" as NSString).size(withAttributes: [.font: doneFont]).width
+            + 26
+        let promptTextWidth = max(1, responseTextWidth - promptFixedWidth)
+        let promptLineHeight = ceil(promptFont.ascender - promptFont.descender + promptFont.leading)
+        let promptLineCount = measuredLineCount(
+            latestUserPrompt,
+            font: promptFont,
+            width: promptTextWidth,
+            maximum: 2
+        )
+        let promptHeight = CGFloat(promptLineCount) * promptLineHeight + 20
+
+        let responseFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        let responseLineHeight = ceil(
+            responseFont.ascender - responseFont.descender + responseFont.leading
+        )
+        let responseLineCount = measuredLineCount(
+            latestAgentResponse,
+            font: responseFont,
+            width: responseTextWidth,
+            maximum: 6
+        )
+        let responseHeight = CGFloat(responseLineCount) * responseLineHeight
+            + CGFloat(responseLineCount - 1) * 2
+            + 20
+
+        return 70 + 8 + promptHeight + responseHeight
+    }
+
+    private func measuredLineCount(
+        _ text: String,
+        font: NSFont,
+        width: CGFloat,
+        maximum: Int
+    ) -> Int {
+        let lineHeight = max(1, ceil(font.ascender - font.descender + font.leading))
+        let bounds = (text as NSString).boundingRect(
+            with: NSSize(width: max(1, width), height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+        return min(maximum, max(1, Int(ceil(bounds.height / lineHeight))))
     }
 }
 
@@ -82,16 +151,28 @@ final class ApplicationModel: ObservableObject {
     private let codexDesktopAdapter = CodexDesktopSessionAdapter()
     private var codexAppServerConnected = false
     private var sessionRemovalTasks: [String: Task<Void, Never>] = [:]
+    private var sessionsArmedForCompletion: Set<String> = []
+    private var latestResponseReceivedAt: [String: Date] = [:]
+    private var completionDetailExpiryTasks: [String: Task<Void, Never>] = [:]
+    private var lastPresentedResponse: [String: String] = [:]
 
     var panelSize: CGSize {
         switch panelMode {
         case .compact:
             return CGSize(width: islandLayout.compactWidth, height: islandLayout.compactHeight)
         case .sessions:
-            let rowHeight = sessions.isEmpty ? 62 : min(224, CGFloat(sessions.count) * 54)
+            let responseTextWidth = max(1, islandLayout.expandedWidth - 56)
+            let rowsHeight = sessions.reduce(CGFloat.zero) { partial, session in
+                partial + session.preferredRowHeight(responseTextWidth: responseTextWidth)
+            }
+            let rowSpacing = CGFloat(max(0, sessions.count - 1)) * 6
+            let rowHeight = sessions.isEmpty ? 62 : min(320, rowsHeight + rowSpacing)
             let decisionHeight: CGFloat = pendingDecision == nil ? 0 : 132
-            let contentHeight = min(392, 38 + rowHeight + decisionHeight)
-            return CGSize(width: 404, height: islandLayout.expandedContentTopInset + contentHeight)
+            let contentHeight = min(366, 12 + rowHeight + decisionHeight)
+            return CGSize(
+                width: islandLayout.expandedWidth,
+                height: islandLayout.expandedContentTopInset + contentHeight
+            )
         case .onboarding:
             return CGSize(width: 416, height: islandLayout.expandedContentTopInset + 364)
         }
@@ -237,6 +318,8 @@ final class ApplicationModel: ObservableObject {
         codexDesktopAdapter.stop()
         for task in sessionRemovalTasks.values { task.cancel() }
         sessionRemovalTasks.removeAll()
+        for task in completionDetailExpiryTasks.values { task.cancel() }
+        completionDetailExpiryTasks.removeAll()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -256,7 +339,9 @@ final class ApplicationModel: ObservableObject {
         }
     }
 
-    private func scheduleCollapseAfterHover() {
+    private func scheduleCollapseAfterHover(
+        delayMilliseconds: Int = IslandCollapsePolicy.hoverDelayMilliseconds
+    ) {
         guard hasStarted, IslandCollapsePolicy.shouldCollapse(
             pointerInside: pointerInsideIsland,
             isSessionPanel: panelMode == .sessions,
@@ -264,7 +349,7 @@ final class ApplicationModel: ObservableObject {
         ) else { return }
         collapseTask?.cancel()
         collapseTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(500))
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
             guard !Task.isCancelled, let self, hasStarted,
                   IslandCollapsePolicy.shouldCollapse(
                     pointerInside: pointerInsideIsland,
@@ -510,10 +595,27 @@ final class ApplicationModel: ObservableObject {
 
     private func consume(_ event: AgentEvent, isDemo: Bool) {
         if isDemo { demoSessionIDs.insert(event.sessionID) }
+        let wasArmedForCompletion = sessionsArmedForCompletion.contains(event.sessionID)
         let result = reducer.apply(event)
         guard case .applied = result else { return }
+        let isNewCompletion = IslandCollapsePolicy.isNewCompletion(
+            wasArmedForCompletion: wasArmedForCompletion,
+            eventKind: event.kind
+        )
+        var completionReceivedAt: Date?
+        if isNewCompletion,
+           reducer.sessions[event.sessionID]?.latestAgentResponse != nil {
+            let receivedAt = latestResponseReceivedAt[event.sessionID] ?? .now
+            recordLatestResponse(for: event.sessionID, receivedAt: receivedAt)
+            completionReceivedAt = receivedAt
+        }
+        updateCompletionArm(for: event)
         syncSessionProjections()
         if !isDemo { localSessionRuntime.persist(reducer.orderedSessions) }
+
+        let presentsCompletion = completionReceivedAt.map {
+            presentCompletionIfNeeded(sessionID: event.sessionID, receivedAt: $0)
+        } ?? false
 
         if soundsEnabled {
             switch event.kind {
@@ -521,11 +623,16 @@ final class ApplicationModel: ObservableObject {
                 chiptunePlayer.play(.arrival)
             case .permissionRequested, .questionRequested, .failed:
                 chiptunePlayer.play(.attention)
-            case .completed:
-                chiptunePlayer.play(.success)
-            case .activity, .permissionResolved, .questionResolved, .sessionEnded:
+            case .activity, .permissionResolved, .questionResolved, .completed, .sessionEnded:
                 break
             }
+        }
+
+        if presentsCompletion {
+            scheduleCollapseAfterHover(
+                delayMilliseconds: IslandCollapsePolicy.completionHoldMilliseconds
+            )
+            return
         }
 
         if let session = reducer.sessions[event.sessionID],
@@ -535,6 +642,55 @@ final class ApplicationModel: ObservableObject {
             panelMode = .sessions
             scheduleCollapseAfterHover()
         }
+    }
+
+    private func updateCompletionArm(for event: AgentEvent) {
+        switch event.kind {
+        case .sessionStarted, .activity, .permissionResolved, .questionResolved:
+            sessionsArmedForCompletion.insert(event.sessionID)
+            lastPresentedResponse.removeValue(forKey: event.sessionID)
+        case .completed, .failed, .sessionEnded:
+            sessionsArmedForCompletion.remove(event.sessionID)
+        case .permissionRequested, .questionRequested:
+            break
+        }
+    }
+
+    private func recordLatestResponse(for sessionID: String, receivedAt: Date) {
+        let observedAt = min(receivedAt, .now)
+        let lifetime = IslandCollapsePolicy.completionDetailLifetimeSeconds
+        guard observedAt >= Date.now.addingTimeInterval(-lifetime) else { return }
+        if let current = latestResponseReceivedAt[sessionID], current > observedAt { return }
+
+        latestResponseReceivedAt[sessionID] = observedAt
+        completionDetailExpiryTasks.removeValue(forKey: sessionID)?.cancel()
+
+        let remainingSeconds = max(0, observedAt.addingTimeInterval(lifetime).timeIntervalSinceNow)
+        let nanoseconds = UInt64(remainingSeconds * 1_000_000_000)
+        completionDetailExpiryTasks[sessionID] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled, let self,
+                  latestResponseReceivedAt[sessionID] == observedAt else { return }
+            latestResponseReceivedAt.removeValue(forKey: sessionID)
+            completionDetailExpiryTasks.removeValue(forKey: sessionID)
+            syncSessionProjections()
+        }
+    }
+
+    @discardableResult
+    private func presentCompletionIfNeeded(sessionID: String, receivedAt: Date) -> Bool {
+        guard panelMode != .onboarding,
+              receivedAt >= Date.now.addingTimeInterval(
+                -IslandCollapsePolicy.completionDetailLifetimeSeconds
+              ),
+              let response = reducer.sessions[sessionID]?.latestAgentResponse,
+              lastPresentedResponse[sessionID] != response else { return false }
+
+        lastPresentedResponse[sessionID] = response
+        cancelCollapse()
+        panelMode = .sessions
+        if soundsEnabled { chiptunePlayer.play(.success) }
+        return true
     }
 
     private func syncSessionProjections() {
@@ -547,13 +703,15 @@ final class ApplicationModel: ObservableObject {
                 title: session.title,
                 detail: session.detail,
                 mood: mood(for: session),
-                startedAt: session.startedAt,
                 isDemo: isDemo,
                 needsAttention: session.pendingRequest != nil || session.phase == .failed,
                 terminal: session.terminal,
                 projectPath: session.projectPath,
                 jumpURL: session.jumpURL,
-                model: session.model
+                model: session.model,
+                latestUserPrompt: session.latestUserPrompt,
+                latestAgentResponse: session.latestAgentResponse,
+                latestResponseReceivedAt: latestResponseReceivedAt[session.id]
             )
         }
     }
@@ -563,7 +721,7 @@ final class ApplicationModel: ObservableObject {
             self?.receive(candidate)
         }
         localSessionRuntime.onSessionEnded = { [weak self] sessionID in
-            self?.removeSession(sessionID)
+            self?.scheduleSessionRemoval(sessionID)
         }
         localSessionRuntime.onInitialScanCompleted = { [weak self] in
             self?.isScanningSessions = false
@@ -581,7 +739,7 @@ final class ApplicationModel: ObservableObject {
             refreshAgentConnections()
         }
         codexDesktopAdapter.onSessionEnded = { [weak self] sessionID in
-            self?.removeSession(sessionID)
+            self?.scheduleSessionRemoval(sessionID)
         }
         codexDesktopAdapter.onConnectionChanged = { [weak self] connected in
             guard let self else { return }
@@ -593,13 +751,44 @@ final class ApplicationModel: ObservableObject {
     private func receive(_ candidate: SessionCandidate) {
         hiddenSessionIDs.formUnion(previewSessionIDs)
         sessionRemovalTasks.removeValue(forKey: candidate.id)?.cancel()
-        _ = reducer.merge(candidate)
+        let previous = reducer.sessions[candidate.id]
+        let merged = reducer.merge(candidate)
+        let hasNewResponse = candidate.latestAgentResponse != nil
+            && candidate.latestAgentResponse != previous?.latestAgentResponse
+
+        if merged.phase == .working, previous?.phase != .working {
+            lastPresentedResponse.removeValue(forKey: candidate.id)
+        }
+        if hasNewResponse,
+           candidate.updatedAt >= Date.now.addingTimeInterval(
+            -IslandCollapsePolicy.completionDetailLifetimeSeconds
+           ) {
+            recordLatestResponse(for: candidate.id, receivedAt: .now)
+        }
+
+        let presentsCompletion = merged.phase == .completed
+            && merged.latestAgentResponse != nil
+            && (previous?.phase != .completed || hasNewResponse)
         syncSessionProjections()
         localSessionRuntime.persist(reducer.orderedSessions)
+
+        if presentsCompletion,
+           presentCompletionIfNeeded(
+            sessionID: candidate.id,
+            receivedAt: latestResponseReceivedAt[candidate.id] ?? candidate.updatedAt
+           ) {
+            scheduleCollapseAfterHover(
+                delayMilliseconds: IslandCollapsePolicy.completionHoldMilliseconds
+            )
+        }
     }
 
     private func removeSession(_ sessionID: String) {
         sessionRemovalTasks.removeValue(forKey: sessionID)?.cancel()
+        completionDetailExpiryTasks.removeValue(forKey: sessionID)?.cancel()
+        sessionsArmedForCompletion.remove(sessionID)
+        latestResponseReceivedAt.removeValue(forKey: sessionID)
+        lastPresentedResponse.removeValue(forKey: sessionID)
         guard reducer.remove(sessionID: sessionID) != nil else { return }
         syncSessionProjections()
         localSessionRuntime.persist(reducer.orderedSessions)
@@ -607,8 +796,17 @@ final class ApplicationModel: ObservableObject {
 
     private func scheduleSessionRemoval(_ sessionID: String) {
         sessionRemovalTasks.removeValue(forKey: sessionID)?.cancel()
+        let recentResponseDelay = latestResponseReceivedAt[sessionID].map { receivedAt in
+            max(
+                0,
+                receivedAt.addingTimeInterval(
+                    IslandCollapsePolicy.completionDetailLifetimeSeconds
+                ).timeIntervalSinceNow
+            )
+        } ?? 0
+        let delayMilliseconds = Int(ceil(max(4, recentResponseDelay) * 1_000))
         sessionRemovalTasks[sessionID] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(4))
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
             guard !Task.isCancelled else { return }
             self?.removeSession(sessionID)
         }

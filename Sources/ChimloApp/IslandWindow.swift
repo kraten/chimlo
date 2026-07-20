@@ -123,7 +123,6 @@ final class IslandWindowCoordinator {
             .store(in: &cancellables)
 
         model.$sessions
-            .map(\.count)
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateFrame(animated: true) }

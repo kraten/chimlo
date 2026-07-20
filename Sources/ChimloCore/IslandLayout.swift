@@ -37,17 +37,26 @@ public struct IslandDisplayMetrics: Equatable, Sendable {
 public struct IslandLayout: Equatable, Sendable {
     public let compactWidth: CGFloat
     public let compactHeight: CGFloat
+    public let expandedWidth: CGFloat
     public let expandedContentTopInset: CGFloat
     public let expandedNeckWidth: CGFloat
     public let cameraHousingWidth: CGFloat
     public let activityWingWidth: CGFloat
     public let hasCameraHousing: Bool
 
-    public static func make(for display: IslandDisplayMetrics, expandedWidth: CGFloat = 416) -> IslandLayout {
+    public static func make(
+        for display: IslandDisplayMetrics,
+        expandedWidthFraction: CGFloat = 0.3
+    ) -> IslandLayout {
+        let expandedWidth = display.screenWidth > 0
+            ? display.screenWidth * expandedWidthFraction
+            : 404
+
         guard display.hasCameraHousing else {
             return IslandLayout(
                 compactWidth: 198,
                 compactHeight: 42,
+                expandedWidth: max(198, expandedWidth),
                 expandedContentTopInset: 0,
                 expandedNeckWidth: 198,
                 cameraHousingWidth: 0,
@@ -64,6 +73,7 @@ public struct IslandLayout: Equatable, Sendable {
         return IslandLayout(
             compactWidth: neckWidth,
             compactHeight: display.safeTopInset,
+            expandedWidth: max(neckWidth, expandedWidth),
             expandedContentTopInset: display.safeTopInset,
             expandedNeckWidth: neckWidth,
             cameraHousingWidth: display.cameraHousingWidth,
@@ -86,11 +96,22 @@ public struct ExpandedIslandSilhouette: Equatable, Sendable {
 }
 
 public enum IslandCollapsePolicy {
+    public static let hoverDelayMilliseconds = 500
+    public static let completionHoldMilliseconds = 5_000
+    public static let completionDetailLifetimeSeconds: TimeInterval = 120
+
     public static func shouldCollapse(
         pointerInside: Bool,
         isSessionPanel: Bool,
         hasBlockingDecision: Bool
     ) -> Bool {
         !pointerInside && isSessionPanel && !hasBlockingDecision
+    }
+
+    public static func isNewCompletion(
+        wasArmedForCompletion: Bool,
+        eventKind: AgentEventKind
+    ) -> Bool {
+        eventKind == .completed && wasArmedForCompletion
     }
 }
