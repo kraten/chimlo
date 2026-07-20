@@ -1,0 +1,116 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|agent_needs_input|agent_completed|idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "async": true,
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}

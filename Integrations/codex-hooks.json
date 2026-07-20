@@ -1,0 +1,83 @@
+{
+  "description": "Local Chimlo activity bridge",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook codex observe # chimlo-codex-observer",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  }
+}

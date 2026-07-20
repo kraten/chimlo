@@ -10,12 +10,17 @@ let package = Package(
     products: [
         .library(name: "ChimloCore", targets: ["ChimloCore"]),
         .library(name: "ChimloProtocol", targets: ["ChimloProtocol"]),
+        .executable(name: "chimlo", targets: ["ChimloCLI"]),
     ],
     targets: [
         .target(name: "ChimloCore"),
         .target(
             name: "ChimloProtocol",
             dependencies: ["ChimloCore"]
+        ),
+        .executableTarget(
+            name: "ChimloCLI",
+            dependencies: ["ChimloCore", "ChimloProtocol"]
         ),
         .testTarget(
             name: "ChimloCoreTests",
