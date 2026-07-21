@@ -44,9 +44,15 @@ struct AgentIntegrationManager {
     let claudeSettingsURL: URL
     let bundledHelperURL: URL
     let stableHelperURL: URL
+    let claudeStatusLineWrapperURL: URL
+    let claudeStatusLineDelegateURL: URL
+    let claudeCapacityCacheURL: URL
 
     static func live(bundle: Bundle = .main, fileManager: FileManager = .default) -> AgentIntegrationManager {
         let home = fileManager.homeDirectoryForCurrentUser
+        let applicationSupport = home
+            .appendingPathComponent("Library/Application Support/Chimlo", isDirectory: true)
+        let binaryDirectory = applicationSupport.appendingPathComponent("bin", isDirectory: true)
         return AgentIntegrationManager(
             codexHooksURL: home
                 .appendingPathComponent(".codex", isDirectory: true)
@@ -58,9 +64,14 @@ struct AgentIntegrationManager {
                 .appendingPathComponent("Contents", isDirectory: true)
                 .appendingPathComponent("Helpers", isDirectory: true)
                 .appendingPathComponent("chimlo"),
-            stableHelperURL: home
-                .appendingPathComponent("Library/Application Support/Chimlo/bin", isDirectory: true)
-                .appendingPathComponent("chimlo")
+            stableHelperURL: binaryDirectory.appendingPathComponent("chimlo"),
+            claudeStatusLineWrapperURL: binaryDirectory
+                .appendingPathComponent("chimlo-claude-statusline"),
+            claudeStatusLineDelegateURL: binaryDirectory
+                .appendingPathComponent("chimlo-claude-statusline-delegate"),
+            claudeCapacityCacheURL: applicationSupport
+                .appendingPathComponent("capacity", isDirectory: true)
+                .appendingPathComponent("claude.json")
         )
     }
 
@@ -134,13 +145,23 @@ struct AgentIntegrationManager {
                 case .current: break
                 }
             case .claude:
-                switch try ClaudeHookConfiguration.installationState(
+                let hookState = try ClaudeHookConfiguration.installationState(
                     in: data,
                     helperPath: stableHelperURL.path
-                ) {
-                case .missing: return .disconnected
-                case .needsRepair: return .needsRepair
-                case .current: break
+                )
+                let statusLineState = try ClaudeStatusLineConfiguration.installationState(
+                    in: data,
+                    wrapperPath: claudeStatusLineWrapperURL.path
+                )
+                if hookState == .missing && statusLineState == .missing { return .disconnected }
+                guard hookState == .current,
+                      statusLineState == .current,
+                      fileManager.isExecutableFile(atPath: claudeStatusLineWrapperURL.path) else {
+                    return .needsRepair
+                }
+                if try ClaudeStatusLineConfiguration.originalCommand(in: data ?? Data()) != nil,
+                   !fileManager.isExecutableFile(atPath: claudeStatusLineDelegateURL.path) {
+                    return .needsRepair
                 }
             }
 
@@ -164,9 +185,13 @@ struct AgentIntegrationManager {
                 helperPath: stableHelperURL.path
             ).data
         case .claude:
-            data = try ClaudeHookConfiguration.merging(
+            let hookPlan = try ClaudeHookConfiguration.merging(
                 existingData: existing,
                 helperPath: stableHelperURL.path
+            )
+            data = try ClaudeStatusLineConfiguration.merging(
+                existingData: hookPlan.data,
+                wrapperPath: claudeStatusLineWrapperURL.path
             ).data
         }
         return String(decoding: data, as: UTF8.self)
@@ -188,12 +213,22 @@ struct AgentIntegrationManager {
             plannedData = plan.data
             changed = plan.changed
         case .claude:
-            let plan = try ClaudeHookConfiguration.merging(
+            let hookPlan = try ClaudeHookConfiguration.merging(
                 existingData: existing,
                 helperPath: stableHelperURL.path
             )
-            plannedData = plan.data
-            changed = plan.changed
+            let statusLinePlan = try ClaudeStatusLineConfiguration.merging(
+                existingData: hookPlan.data,
+                wrapperPath: claudeStatusLineWrapperURL.path
+            )
+            plannedData = statusLinePlan.data
+            changed = hookPlan.changed || statusLinePlan.changed
+            try prepareClaudeStatusLineScripts(
+                originalCommand: try ClaudeStatusLineConfiguration.originalCommand(
+                    in: plannedData
+                ),
+                fileManager: fileManager
+            )
         }
         guard changed else { return }
 
@@ -208,7 +243,10 @@ struct AgentIntegrationManager {
 
     func disconnect(_ provider: AgentProvider, fileManager: FileManager = .default) throws {
         let destination = configurationURL(for: provider)
-        guard fileManager.fileExists(atPath: destination.path) else { return }
+        guard fileManager.fileExists(atPath: destination.path) else {
+            if provider == .claude { removeClaudeStatusLineScripts(fileManager: fileManager) }
+            return
+        }
         let existing = try Data(contentsOf: destination)
         let data: Data
         let changed: Bool
@@ -218,11 +256,17 @@ struct AgentIntegrationManager {
             data = plan.data
             changed = plan.changed
         case .claude:
-            let plan = try ClaudeHookConfiguration.removing(existingData: existing)
-            data = plan.data
-            changed = plan.changed
+            let hookPlan = try ClaudeHookConfiguration.removing(existingData: existing)
+            let statusLinePlan = try ClaudeStatusLineConfiguration.removing(
+                existingData: hookPlan.data
+            )
+            data = statusLinePlan.data
+            changed = hookPlan.changed || statusLinePlan.changed
         }
-        guard changed else { return }
+        guard changed else {
+            if provider == .claude { removeClaudeStatusLineScripts(fileManager: fileManager) }
+            return
+        }
 
         let permissions = try fileManager.attributesOfItem(atPath: destination.path)[.posixPermissions] as? NSNumber
         try data.write(to: destination, options: .atomic)
@@ -230,6 +274,7 @@ struct AgentIntegrationManager {
             [.posixPermissions: permissions ?? NSNumber(value: 0o600)],
             ofItemAtPath: destination.path
         )
+        if provider == .claude { removeClaudeStatusLineScripts(fileManager: fileManager) }
     }
 
     private func configurationURL(for provider: AgentProvider) -> URL {
@@ -283,6 +328,10 @@ struct AgentIntegrationManager {
                 in: written,
                 helperPath: stableHelperURL.path
             ) == .current
+                && ClaudeStatusLineConfiguration.installationState(
+                    in: written,
+                    wrapperPath: claudeStatusLineWrapperURL.path
+                ) == .current
         }
         guard isCurrent else { throw IntegrationError.validationFailed(provider.displayName) }
     }
@@ -301,6 +350,64 @@ struct AgentIntegrationManager {
             [.posixPermissions: permissions ?? NSNumber(value: 0o600)],
             ofItemAtPath: backupURL.path
         )
+    }
+
+    private func prepareClaudeStatusLineScripts(
+        originalCommand: String?,
+        fileManager: FileManager
+    ) throws {
+        let directory = claudeStatusLineWrapperURL.deletingLastPathComponent()
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+
+        let helper = shellQuoted(stableHelperURL.path)
+        let cache = shellQuoted(claudeCapacityCacheURL.path)
+        let delegate = shellQuoted(claudeStatusLineDelegateURL.path)
+        let wrapper = """
+        #!/bin/sh
+        # Chimlo Claude capacity bridge. Managed by Chimlo.
+        input=$(cat)
+        printf '%s' "$input" | \(helper) __capture-claude-capacity \(cache) >/dev/null 2>&1 || true
+        if [ -x \(delegate) ]; then
+          printf '%s' "$input" | \(delegate)
+        fi
+        """ + "\n"
+        try writeExecutable(wrapper, to: claudeStatusLineWrapperURL, fileManager: fileManager)
+
+        if let originalCommand {
+            let delegateScript = "#!/bin/sh\n# Original Claude Code status line preserved by Chimlo.\n\(originalCommand)\n"
+            try writeExecutable(
+                delegateScript,
+                to: claudeStatusLineDelegateURL,
+                fileManager: fileManager
+            )
+        } else if fileManager.fileExists(atPath: claudeStatusLineDelegateURL.path) {
+            try fileManager.removeItem(at: claudeStatusLineDelegateURL)
+        }
+    }
+
+    private func removeClaudeStatusLineScripts(fileManager: FileManager) {
+        for url in [claudeStatusLineWrapperURL, claudeStatusLineDelegateURL]
+            where fileManager.fileExists(atPath: url.path) {
+            try? fileManager.removeItem(at: url)
+        }
+    }
+
+    private func writeExecutable(
+        _ contents: String,
+        to url: URL,
+        fileManager: FileManager
+    ) throws {
+        try Data(contents.utf8).write(to: url, options: .atomic)
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+    }
+
+    private func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private enum IntegrationError: Error, LocalizedError {

@@ -43,6 +43,8 @@ enum ChimloCommand {
             let store = try RuntimeDescriptorStore.live()
             let descriptor = try store.read()
             print("\(descriptor.host):\(descriptor.port) pid=\(descriptor.processID) protocol=\(descriptor.protocolVersion)")
+        case "__capture-claude-capacity":
+            captureClaudeCapacity(Array(arguments.dropFirst()))
         case "__native-overlay-guard":
             guard arguments.count == 2,
                   let ownerPID = Int32(arguments[1]),
@@ -55,6 +57,22 @@ enum ChimloCommand {
         default:
             throw CLIError("Unknown command '\(command)'.\n\n\(usage)")
         }
+    }
+
+    /// Claude Code invokes this through Chimlo's managed status-line wrapper.
+    /// It retains only the provider-owned rate-limit windows and deliberately
+    /// emits no stdout so a user without a custom status line gains no terminal
+    /// chrome. Every failure is fail-open for Claude Code.
+    private static func captureClaudeCapacity(_ arguments: [String]) {
+        guard arguments.count == 1,
+              let data = try? FileHandle.standardInput.read(upToCount: 512 * 1_024),
+              let snapshot = ProviderCapacityParser.claudeStatusLine(data) else {
+            return
+        }
+        try? ProviderCapacityFile.write(
+            snapshot,
+            to: URL(fileURLWithPath: arguments[0])
+        )
     }
 
     private static func handleProviderHook(_ arguments: [String]) async {

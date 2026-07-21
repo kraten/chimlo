@@ -156,6 +156,7 @@ struct SessionQuestionPresentation: Identifiable, Equatable, Sendable {
 enum PanelMode: Equatable, Sendable {
     case compact
     case sessions
+    case usage
     case onboarding
 }
 
@@ -184,6 +185,14 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var isScanningSessions = true
     @Published private(set) var systemFeedback: SystemFeedbackPresentation?
     @Published private(set) var systemFeedbackState: SystemFeedbackEngineState = .disabled
+    @Published private(set) var capacitySnapshots: [CapacityProvider: ProviderCapacitySnapshot] = [:]
+    @Published private(set) var capacityClock = Date.now
+
+    @Published var selectedCapacityProvider: CapacityProvider {
+        didSet {
+            defaults.set(selectedCapacityProvider.rawValue, forKey: Keys.selectedCapacityProvider)
+        }
+    }
 
     let mediaPlayback = MediaPlaybackMonitor()
 
@@ -241,6 +250,8 @@ final class ApplicationModel: ObservableObject {
     private var lastPresentedResponse: [String: String] = [:]
     private var codexModelDisplayNames: [String: String] = [:]
     private var systemFeedbackExpiryTask: Task<Void, Never>?
+    private var capacityMonitorTask: Task<Void, Never>?
+    private var capacityRefreshFailures: Set<CapacityProvider> = []
 
     var panelSize: CGSize {
         switch panelMode {
@@ -261,6 +272,11 @@ final class ApplicationModel: ObservableObject {
             return CGSize(
                 width: islandLayout.expandedWidth,
                 height: islandLayout.expandedContentTopInset + contentHeight
+            )
+        case .usage:
+            return CGSize(
+                width: islandLayout.expandedWidth,
+                height: islandLayout.expandedContentTopInset + CapacityLayout.usageContentHeight
             )
         case .onboarding:
             return CGSize(width: 416, height: islandLayout.expandedContentTopInset + 364)
@@ -304,7 +320,8 @@ final class ApplicationModel: ObservableObject {
     var shouldShowCompactMedia: Bool {
         guard let media = mediaPlayback.presentation,
               media.isPlaying,
-              pendingDecision == nil else { return false }
+              pendingDecision == nil,
+              lowCapacityReading == nil else { return false }
         return !sessions.contains {
             $0.needsAttention || $0.mood == .failed
         }
@@ -397,6 +414,14 @@ final class ApplicationModel: ObservableObject {
         soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         keepPreviewSession = defaults.object(forKey: Keys.keepPreviewSession) as? Bool ?? true
         replacesSystemFeedback = defaults.object(forKey: Keys.replacesSystemFeedback) as? Bool ?? true
+        selectedCapacityProvider = defaults.string(forKey: Keys.selectedCapacityProvider)
+            .flatMap(CapacityProvider.init(rawValue:))
+            ?? .codex
+        for provider in CapacityProvider.allCases {
+            if let snapshot = try? ProviderCapacityFile.load(from: Self.capacityCacheURL(for: provider)) {
+                capacitySnapshots[provider] = snapshot
+            }
+        }
     }
 
     func start() {
@@ -464,6 +489,7 @@ final class ApplicationModel: ObservableObject {
             claudeConnectionState = .unavailable(error.localizedDescription)
         }
         configureSessionRuntime()
+        startCapacityMonitoring()
         localSessionRuntime.start()
         codexDesktopAdapter.start()
         refreshAgentConnections()
@@ -494,6 +520,8 @@ final class ApplicationModel: ObservableObject {
         protocolBridge = nil
         localSessionRuntime.stop()
         codexDesktopAdapter.stop()
+        capacityMonitorTask?.cancel()
+        capacityMonitorTask = nil
         sessionActivityExpiryTask?.cancel()
         sessionActivityExpiryTask = nil
         for task in sessionRemovalTasks.values { task.cancel() }
@@ -509,7 +537,7 @@ final class ApplicationModel: ObservableObject {
     }
 
     func collapsePanelFromOutsideClick() {
-        guard panelMode == .sessions else { return }
+        guard panelMode == .sessions || panelMode == .usage else { return }
         cancelCollapse()
         pointerInsideIsland = false
         panelMode = .compact
@@ -531,7 +559,7 @@ final class ApplicationModel: ObservableObject {
     ) {
         guard hasStarted, IslandCollapsePolicy.shouldCollapse(
             pointerInside: pointerInsideIsland,
-            isSessionPanel: panelMode == .sessions,
+            isSessionPanel: panelMode == .sessions || panelMode == .usage,
             hasBlockingDecision: pendingDecision != nil
                 || !sessionPermissions.isEmpty
                 || !sessionQuestions.isEmpty
@@ -542,7 +570,7 @@ final class ApplicationModel: ObservableObject {
             guard !Task.isCancelled, let self, hasStarted,
                   IslandCollapsePolicy.shouldCollapse(
                     pointerInside: pointerInsideIsland,
-                    isSessionPanel: panelMode == .sessions,
+                    isSessionPanel: panelMode == .sessions || panelMode == .usage,
                     hasBlockingDecision: pendingDecision != nil
                         || !sessionPermissions.isEmpty
                         || !sessionQuestions.isEmpty
@@ -555,6 +583,56 @@ final class ApplicationModel: ObservableObject {
     func cancelCollapse() {
         collapseTask?.cancel()
         collapseTask = nil
+    }
+
+    func toggleSelectedCapacityProvider() {
+        selectedCapacityProvider = selectedCapacityProvider == .codex ? .claude : .codex
+    }
+
+    func toggleUsageView() {
+        cancelCollapse()
+        panelMode = panelMode == .usage ? .sessions : .usage
+    }
+
+    func capacityReading(
+        provider: CapacityProvider,
+        kind: CapacityWindowKind
+    ) -> CapacityReading {
+        let snapshot = capacitySnapshots[provider]
+        guard let window = snapshot?.window(kind), !window.isExpired(at: capacityClock) else {
+            return CapacityReading(
+                window: nil,
+                isApproximate: false,
+                lastUpdatedAt: snapshot?.observedAt
+            )
+        }
+        return CapacityReading(
+            window: window,
+            isApproximate: CapacityPolicy.isApproximate(
+                window,
+                refreshFailed: capacityRefreshFailures.contains(provider),
+                now: capacityClock
+            ),
+            lastUpdatedAt: snapshot?.observedAt
+        )
+    }
+
+    func primaryCapacityReading(for provider: CapacityProvider) -> CapacityReading {
+        capacityReading(
+            provider: provider,
+            kind: provider == .codex ? .weekly : .session
+        )
+    }
+
+    var lowCapacityReading: CapacityReading? {
+        let readings = [
+            capacityReading(provider: .codex, kind: .weekly),
+            capacityReading(provider: .claude, kind: .session),
+            capacityReading(provider: .claude, kind: .weekly),
+        ]
+        return readings
+            .filter(\.isWarning)
+            .min { ($0.remainingPercentage ?? 101) < ($1.remainingPercentage ?? 101) }
     }
 
     func updateIslandLayout(_ layout: IslandLayout) {
@@ -732,7 +810,7 @@ final class ApplicationModel: ObservableObject {
         alert.messageText = "Connect \(provider.displayName) to Chimlo?"
         let filename = provider == .codex ? "hooks.json" : "settings.json"
         let questionNote = provider == .claude
-            ? " Claude questions and permissions route through Chimlo while it is running; Claude Code remains the fallback."
+            ? " Claude questions and permissions route through Chimlo while it is running; Claude Code remains the fallback. The reversible status-line bridge stores only 5h and 7d usage limits and restores any existing custom status line on disconnect."
             : ""
         alert.informativeText = "Review the complete merged \(filename) below. Existing settings stay in place, and Chimlo keeps a one-time backup before writing.\(questionNote)"
         alert.addButton(withTitle: "Connect")
@@ -1098,6 +1176,59 @@ final class ApplicationModel: ObservableObject {
             codexModelDisplayNames = catalog
             syncSessionProjections()
         }
+        codexDesktopAdapter.onWeeklyCapacity = { [weak self] snapshot in
+            self?.receiveCapacity(snapshot)
+        }
+        codexDesktopAdapter.onCapacityRefreshFailed = { [weak self] in
+            guard let self else { return }
+            capacityRefreshFailures.insert(.codex)
+            capacityClock = .now
+        }
+    }
+
+    private func startCapacityMonitoring() {
+        refreshClaudeCapacityFromCache()
+        capacityMonitorTask?.cancel()
+        capacityMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled, let self else { return }
+                capacityClock = .now
+                refreshClaudeCapacityFromCache()
+            }
+        }
+    }
+
+    private func refreshClaudeCapacityFromCache() {
+        let url = Self.capacityCacheURL(for: .claude)
+        guard let snapshot = try? ProviderCapacityFile.load(from: url),
+              snapshot.provider == .claude,
+              snapshot.observedAt > (capacitySnapshots[.claude]?.observedAt ?? .distantPast) else {
+            return
+        }
+        receiveCapacity(snapshot, persist: false)
+    }
+
+    private func receiveCapacity(
+        _ snapshot: ProviderCapacitySnapshot,
+        persist: Bool = true
+    ) {
+        capacitySnapshots[snapshot.provider] = snapshot
+        capacityRefreshFailures.remove(snapshot.provider)
+        capacityClock = .now
+        if persist {
+            try? ProviderCapacityFile.write(
+                snapshot,
+                to: Self.capacityCacheURL(for: snapshot.provider)
+            )
+        }
+    }
+
+    private static func capacityCacheURL(for provider: CapacityProvider) -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Chimlo", isDirectory: true)
+            .appendingPathComponent("capacity", isDirectory: true)
+            .appendingPathComponent("\(provider.rawValue).json")
     }
 
     private func codexModelDisplayName(for session: AgentSession) -> String? {
@@ -1681,6 +1812,7 @@ final class ApplicationModel: ObservableObject {
         static let keepPreviewSession = "chimlo.preview.keepSession"
         static let replacesSystemFeedback = "chimlo.systemFeedback.replacesNative"
         static let archivedSessions = "chimlo.sessions.archived"
+        static let selectedCapacityProvider = "chimlo.capacity.selectedProvider"
     }
 
     private struct QuestionFlow {

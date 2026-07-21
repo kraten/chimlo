@@ -97,6 +97,8 @@ private final class CodexAppServerClient: @unchecked Sendable {
 
     var onNotification: (@Sendable (CodexDesktopNotification) -> Void)?
     var onModelCatalog: (@Sendable ([String: String]) -> Void)?
+    var onRateLimits: (@Sendable (JSONObject) -> Void)?
+    var onRateLimitsFailure: (@Sendable () -> Void)?
     var onReady: (@Sendable () -> Void)?
     var onDisconnected: (@Sendable () -> Void)?
 
@@ -160,6 +162,7 @@ private final class CodexAppServerClient: @unchecked Sendable {
                 stop()
             case .success:
                 sendNotification(method: "initialized", params: [:])
+                refreshRateLimits()
                 synchronizeModels()
                 synchronizeLoadedThreads()
             }
@@ -170,6 +173,15 @@ private final class CodexAppServerClient: @unchecked Sendable {
         process?.terminationHandler = nil
         process?.terminate()
         finishDisconnect()
+    }
+
+    func refreshRateLimits() {
+        request(method: "account/rateLimits/read", params: [:]) { [weak self] result in
+            switch result {
+            case let .success(object): self?.onRateLimits?(object)
+            case .failure: self?.onRateLimitsFailure?()
+            }
+        }
     }
 
     private func synchronizeLoadedThreads() {
@@ -393,6 +405,8 @@ private final class CodexAppServerClient: @unchecked Sendable {
             guard let id = params["threadId"] as? String else { return }
             let turn = params["turn"] as? JSONObject
             onNotification?(.turnCompleted(id: id, status: turn?["status"] as? String ?? "completed"))
+        case "account/rateLimits/updated":
+            onRateLimits?(params)
         default:
             break
         }
@@ -423,16 +437,20 @@ final class CodexDesktopSessionAdapter {
     var onSessionEnded: ((String) -> Void)?
     var onConnectionChanged: ((Bool) -> Void)?
     var onModelCatalog: (([String: String]) -> Void)?
+    var onWeeklyCapacity: ((ProviderCapacitySnapshot) -> Void)?
+    var onCapacityRefreshFailed: (() -> Void)?
 
     private var client: CodexAppServerClient?
     private var monitorTask: Task<Void, Never>?
     private var knownThreads: [String: SessionCandidate] = [:]
+    private var lastCapacityRefreshAt: Date = .distantPast
 
     func start() {
         guard monitorTask == nil else { return }
         monitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.reconcileApplicationState()
+                self?.refreshCapacityIfNeeded()
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -467,11 +485,22 @@ final class CodexDesktopSessionAdapter {
         let executableURL = appURL.appendingPathComponent("Contents/Resources/codex")
         let client = CodexAppServerClient(executableURL: executableURL)
         self.client = client
+        lastCapacityRefreshAt = .now
         client.onNotification = { [weak self] notification in
             Task { @MainActor [weak self] in self?.handle(notification) }
         }
         client.onModelCatalog = { [weak self] catalog in
             Task { @MainActor [weak self] in self?.onModelCatalog?(catalog) }
+        }
+        client.onRateLimits = { [weak self] object in
+            guard let snapshot = ProviderCapacityParser.codexAppServer(object) else { return }
+            Task { @MainActor [weak self] in
+                self?.lastCapacityRefreshAt = .now
+                self?.onWeeklyCapacity?(snapshot)
+            }
+        }
+        client.onRateLimitsFailure = { [weak self] in
+            Task { @MainActor [weak self] in self?.onCapacityRefreshFailed?() }
         }
         client.onReady = { [weak self] in
             Task { @MainActor [weak self] in self?.onConnectionChanged?(true) }
@@ -481,6 +510,7 @@ final class CodexDesktopSessionAdapter {
                 guard let self, self.client === client else { return }
                 self.client = nil
                 self.onConnectionChanged?(false)
+                self.onCapacityRefreshFailed?()
             }
         }
         do {
@@ -488,7 +518,15 @@ final class CodexDesktopSessionAdapter {
         } catch {
             self.client = nil
             onConnectionChanged?(false)
+            onCapacityRefreshFailed?()
         }
+    }
+
+    private func refreshCapacityIfNeeded() {
+        guard let client,
+              Date.now.timeIntervalSince(lastCapacityRefreshAt) >= 5 * 60 else { return }
+        lastCapacityRefreshAt = .now
+        client.refreshRateLimits()
     }
 
     private func handle(_ notification: CodexDesktopNotification) {
