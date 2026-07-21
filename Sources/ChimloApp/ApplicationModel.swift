@@ -125,6 +125,8 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var systemFeedback: SystemFeedbackPresentation?
     @Published private(set) var systemFeedbackState: SystemFeedbackEngineState = .disabled
 
+    let mediaPlayback = MediaPlaybackMonitor()
+
     @Published var soundsEnabled: Bool {
         didSet { defaults.set(soundsEnabled, forKey: Keys.soundsEnabled) }
     }
@@ -207,6 +209,15 @@ final class ApplicationModel: ObservableObject {
         if sessions.contains(where: { $0.mood == .working }) { return "WORK" }
         if sessions.contains(where: { $0.mood == .success }) { return "DONE" }
         return "READY"
+    }
+
+    var shouldShowCompactMedia: Bool {
+        guard let media = mediaPlayback.presentation,
+              media.isPlaying,
+              pendingDecision == nil else { return false }
+        return !sessions.contains {
+            $0.needsAttention || $0.mood == .failed
+        }
     }
 
     var serverStatusText: String {
@@ -322,6 +333,7 @@ final class ApplicationModel: ObservableObject {
             replacesSystemFeedback,
             promptForPermission: replacesSystemFeedback
         )
+        mediaPlayback.start()
 
         let bridge = ProtocolBridge()
         protocolBridge = bridge
@@ -368,6 +380,7 @@ final class ApplicationModel: ObservableObject {
         systemFeedbackEngine.presentationChanged = nil
         systemFeedbackEngine.stateChanged = nil
         systemFeedback = nil
+        mediaPlayback.stop()
         finishPendingDecision(outcome: .unavailable, note: "Chimlo closed before a decision was made")
         protocolBridge?.stop()
         protocolBridge = nil

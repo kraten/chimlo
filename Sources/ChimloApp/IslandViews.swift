@@ -15,7 +15,7 @@ struct IslandRootView: View {
 
                 switch model.panelMode {
                 case .compact:
-                    CompactIslandView(model: model)
+                    CompactIslandView(model: model, media: model.mediaPlayback)
                         .padding(.horizontal, model.islandLayout.hasCameraHousing ? 0 : 13)
                         .padding(.vertical, model.islandLayout.hasCameraHousing ? 0 : 5)
                 case .sessions:
@@ -52,7 +52,7 @@ struct IslandRootView: View {
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Chimlo agent monitor")
+        .accessibilityLabel("Chimlo activity island")
     }
 
     @ViewBuilder
@@ -299,27 +299,45 @@ private struct SystemFeedbackCompactContent: View {
 
 private struct CompactIslandView: View {
     @ObservedObject var model: ApplicationModel
+    @ObservedObject var media: MediaPlaybackMonitor
 
     var body: some View {
-        Button(action: model.openPanel) {
-            Group {
-                if let feedback = model.systemFeedback {
+        Group {
+            if let feedback = model.systemFeedback {
+                openPanelButton {
                     SystemFeedbackCompactContent(feedback: feedback, model: model)
-                } else if model.islandLayout.hasCameraHousing {
-                    notchContent
-                } else {
-                    standardContent
+                }
+            } else if model.shouldShowCompactMedia, media.presentation != nil {
+                CompactMusicPlayerView(model: model, media: media)
+            } else {
+                openPanelButton {
+                    if model.islandLayout.hasCameraHousing {
+                        notchContent
+                    } else {
+                        standardContent
+                    }
                 }
             }
-            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(compactAccessibilityLabel)
+    }
+
+    private func openPanelButton<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Button(action: model.openPanel) {
+            content()
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(compactAccessibilityLabel)
     }
 
     private var compactAccessibilityLabel: String {
         if let feedback = model.systemFeedback {
             return "Open Chimlo. \(feedback.accessibilityDescription)."
+        }
+        if model.shouldShowCompactMedia, let presentation = media.presentation {
+            return "\(presentation.accessibilityDescription)."
         }
         return "Open Chimlo. \(summary). \(model.compactLabel.lowercased())."
     }
@@ -553,7 +571,7 @@ struct SessionRow: View {
     }
 
     private var rowContent: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 8) {
             PixelAvatar(mood: session.mood, seed: seed, size: 34, reduceMotion: reduceMotion)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -629,6 +647,7 @@ struct SessionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.leading, 8)
         .padding(.trailing, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 62)

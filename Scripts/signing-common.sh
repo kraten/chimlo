@@ -58,6 +58,11 @@ chimlo_codesign_path() {
 chimlo_sign_app_bundle() {
   typeset app_path="$1"
   typeset helper_path="$app_path/Contents/Helpers/chimlo"
+  typeset mediaremote_framework_path="$app_path/Contents/Resources/MediaRemoteAdapter/MediaRemoteAdapter.framework"
+
+  if [[ -d "$mediaremote_framework_path" ]]; then
+    chimlo_codesign_path "$mediaremote_framework_path"
+  fi
 
   if [[ -f "$helper_path" ]]; then
     chimlo_codesign_path "$helper_path"

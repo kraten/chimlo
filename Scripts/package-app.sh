@@ -7,6 +7,9 @@ APP_DIR="$PROJECT_DIR/dist/Chimlo.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 HELPERS_DIR="$CONTENTS_DIR/Helpers"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+MEDIAREMOTE_SOURCE_DIR="$PROJECT_DIR/Vendor/MediaRemoteAdapter"
+MEDIAREMOTE_DESTINATION_DIR="$RESOURCES_DIR/MediaRemoteAdapter"
 source "$SCRIPT_DIR/signing-common.sh"
 
 cd "$PROJECT_DIR"
@@ -20,12 +23,19 @@ else
 fi
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$HELPERS_DIR"
+mkdir -p "$MACOS_DIR" "$HELPERS_DIR" "$MEDIAREMOTE_DESTINATION_DIR"
 cp "$PROJECT_DIR/Packaging/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$BIN_DIR/ChimloApp" "$MACOS_DIR/Chimlo"
 cp "$BIN_DIR/chimlo" "$HELPERS_DIR/chimlo"
+cp "$MEDIAREMOTE_SOURCE_DIR/mediaremote-adapter.pl" "$MEDIAREMOTE_DESTINATION_DIR/mediaremote-adapter.pl"
+cp "$MEDIAREMOTE_SOURCE_DIR/LICENSE" "$MEDIAREMOTE_DESTINATION_DIR/LICENSE"
+cp -R "$MEDIAREMOTE_SOURCE_DIR/MediaRemoteAdapter.framework" "$MEDIAREMOTE_DESTINATION_DIR/MediaRemoteAdapter.framework"
 
-chmod 755 "$MACOS_DIR/Chimlo" "$HELPERS_DIR/chimlo"
+chmod 755 \
+  "$MACOS_DIR/Chimlo" \
+  "$HELPERS_DIR/chimlo" \
+  "$MEDIAREMOTE_DESTINATION_DIR/mediaremote-adapter.pl" \
+  "$MEDIAREMOTE_DESTINATION_DIR/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter"
 
 if command -v codesign >/dev/null 2>&1; then
   chimlo_configure_signing
