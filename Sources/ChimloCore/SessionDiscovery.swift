@@ -71,6 +71,19 @@ public struct SessionCandidate: Codable, Equatable, Sendable, Identifiable {
         self.evidence = evidence
     }
 
+    public func normalizedForCache() -> SessionCandidate {
+        var normalized = self
+        normalized.evidence = .cache
+        switch normalized.phase {
+        case .waitingForApproval, .waitingForAnswer:
+            normalized.phase = .working
+            normalized.detail = "Working"
+        case .working, .completed, .failed:
+            break
+        }
+        return normalized
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, agent, title, titleKind, detail, model, terminal, projectPath
         case jumpURL, phase, updatedAt, evidence

@@ -68,6 +68,22 @@ struct SessionReducerTests {
         #expect(reducer.sessions["s1"]?.pendingRequest == nil)
     }
 
+    @Test("Optionless input signals do not become questions")
+    func optionlessInputIsNotAQuestion() {
+        var reducer = SessionReducer()
+        expectApplied(reducer.apply(event(sequence: 1, kind: .sessionStarted)))
+        let input = PendingRequest.question(
+            AgentQuestion(id: "q1", prompt: "Continue in source app")
+        )
+
+        #expect(
+            reducer.apply(event(sequence: 2, kind: .questionRequested, request: input))
+                == .ignoredMissingSession
+        )
+        #expect(reducer.sessions["s1"]?.phase == .working)
+        #expect(reducer.sessions["s1"]?.pendingRequest == nil)
+    }
+
     @Test("Non-start events cannot invent a session")
     func nonStartEventCannotCreateSession() {
         var reducer = SessionReducer()

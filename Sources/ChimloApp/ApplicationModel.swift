@@ -456,6 +456,13 @@ final class ApplicationModel: ObservableObject {
         panelMode = .sessions
     }
 
+    func collapsePanelFromOutsideClick() {
+        guard panelMode == .sessions else { return }
+        cancelCollapse()
+        pointerInsideIsland = false
+        panelMode = .compact
+    }
+
     func pointerPresenceChanged(_ inside: Bool) {
         pointerInsideIsland = inside
         if inside {
@@ -915,7 +922,10 @@ final class ApplicationModel: ObservableObject {
     private func syncSessionProjections() {
         let projectedSessions: [SessionDisplayModel] = reducer.orderedSessions.compactMap { session in
             guard !hiddenSessionIDs.contains(session.id),
-                  archivedSessionMarkers[session.id] == nil else { return nil }
+                  archivedSessionMarkers[session.id] == nil,
+                  !session.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return nil
+            }
             let isDemo = demoSessionIDs.contains(session.id)
             return SessionDisplayModel(
                 id: session.id,

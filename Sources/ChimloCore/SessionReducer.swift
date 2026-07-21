@@ -142,7 +142,8 @@ public struct SessionReducer: Sendable {
             session.phase = .working
             session.pendingRequest = nil
         case .questionRequested:
-            guard case .question? = event.request else { return .ignoredMissingSession }
+            guard case let .question(question)? = event.request,
+                  !question.options.isEmpty else { return .ignoredMissingSession }
             session.phase = .waitingForAnswer
             session.pendingRequest = event.request
         case .questionResolved:

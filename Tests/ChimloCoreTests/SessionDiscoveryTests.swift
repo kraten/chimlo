@@ -4,6 +4,24 @@ import Testing
 
 @Suite("Local session discovery")
 struct SessionDiscoveryTests {
+    @Test("Cached owner interactions do not restore without their transient options")
+    func cachedOwnerInteractionsRequireLiveOptions() {
+        for phase in [SessionPhase.waitingForAnswer, .waitingForApproval] {
+            let restored = SessionCandidate(
+                id: "claude-1",
+                agent: .claude,
+                title: "Create a file",
+                detail: phase == .waitingForAnswer ? "Waiting for input" : "Waiting for approval",
+                phase: phase,
+                updatedAt: Date(timeIntervalSince1970: 100),
+                evidence: .cache
+            ).normalizedForCache()
+
+            #expect(restored.phase == .working)
+            #expect(restored.detail == "Working")
+        }
+    }
+
     @Test("Codex rollout exposes visible conversation previews without persisting them")
     func codexConversationPreview() throws {
         var scanner = PrivacySafeSessionMetadataScanner(provider: .codex)

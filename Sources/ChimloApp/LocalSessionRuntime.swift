@@ -346,11 +346,9 @@ final class LocalSessionRegistry: @unchecked Sendable {
               let decoded = try? JSONDecoder.iso8601.decode(RegistryFile.self, from: data),
               decoded.version == 1 else { return [] }
         let cutoff = now.addingTimeInterval(-86_400)
-        return decoded.sessions.filter { $0.updatedAt >= cutoff }.map { candidate in
-            var restored = candidate
-            restored.evidence = .cache
-            return restored
-        }
+        return decoded.sessions
+            .filter { $0.updatedAt >= cutoff }
+            .map { $0.normalizedForCache() }
     }
 
     func save(_ sessions: [AgentSession]) throws {
@@ -369,7 +367,7 @@ final class LocalSessionRegistry: @unchecked Sendable {
                 phase: session.phase,
                 updatedAt: session.updatedAt,
                 evidence: .cache
-            )
+            ).normalizedForCache()
         }
         let data = try JSONEncoder.iso8601.encode(RegistryFile(version: 1, sessions: Array(candidates)))
         let directory = fileURL.deletingLastPathComponent()

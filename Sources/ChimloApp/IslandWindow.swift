@@ -100,21 +100,36 @@ final class IslandWindowCoordinator {
     private func installPointerMonitoring() {
         let mask: NSEvent.EventTypeMask = [
             .mouseMoved,
+            .leftMouseDown,
+            .rightMouseDown,
+            .otherMouseDown,
             .leftMouseDragged,
             .rightMouseDragged,
             .otherMouseDragged,
         ]
 
-        globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+        globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.refreshPointerPresence()
+                self?.handlePointerEvent(event)
             }
         }
         localPointerMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.refreshPointerPresence()
+                self?.handlePointerEvent(event)
             }
             return event
+        }
+    }
+
+    private func handlePointerEvent(_ event: NSEvent) {
+        refreshPointerPresence()
+        switch event.type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            if !intendedPanelFrameContainsPointer {
+                model.collapsePanelFromOutsideClick()
+            }
+        default:
+            break
         }
     }
 

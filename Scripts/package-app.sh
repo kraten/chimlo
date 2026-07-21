@@ -38,6 +38,10 @@ chmod 755 \
   "$MEDIAREMOTE_DESTINATION_DIR/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter"
 
 if command -v codesign >/dev/null 2>&1; then
+  # Finder and downloaded vendor artifacts can carry provenance or quarantine
+  # metadata into the generated bundle. Strip it from the disposable package
+  # copy so codesign can replace nested signatures deterministically.
+  /usr/bin/xattr -cr "$APP_DIR"
   chimlo_configure_signing
   chimlo_sign_app_bundle "$APP_DIR"
 
