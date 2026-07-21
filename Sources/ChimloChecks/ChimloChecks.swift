@@ -473,6 +473,40 @@ private struct CheckSuite {
         )
         expect(
             SessionVisibilityPolicy.shouldDisplay(
+                title: "chimlo",
+                titleKind: .workspace,
+                isDemo: false,
+                hasActionableRequest: false,
+                hasConversationPreview: true
+            ),
+            "a response-backed Claude workspace session remains visible"
+        )
+        expect(
+            !SessionVisibilityPolicy.shouldDisplay(
+                title: "Review recent changes",
+                titleKind: .task,
+                isDemo: false,
+                hasActionableRequest: false,
+                hasConversationPreview: true,
+                agent: .codex,
+                model: "codex-auto-review"
+            ),
+            "Codex Auto Review sessions stay hidden"
+        )
+        expect(
+            SessionVisibilityPolicy.shouldDisplay(
+                title: "Review recent changes",
+                titleKind: .task,
+                isDemo: false,
+                hasActionableRequest: false,
+                hasConversationPreview: true,
+                agent: .codex,
+                model: "gpt-5.6-sol"
+            ),
+            "ordinary Codex sessions remain visible"
+        )
+        expect(
+            SessionVisibilityPolicy.shouldDisplay(
                 title: "Fix model display names",
                 titleKind: .task,
                 isDemo: false,

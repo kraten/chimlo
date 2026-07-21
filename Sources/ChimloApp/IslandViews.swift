@@ -638,7 +638,13 @@ struct SessionRow: View {
 
     private var rowContent: some View {
         HStack(spacing: 8) {
-            PixelAvatar(mood: session.mood, seed: seed, size: 34, reduceMotion: reduceMotion)
+            PixelAvatar(
+                mood: session.mood,
+                seed: seed,
+                size: 34,
+                reduceMotion: reduceMotion,
+                palette: isClaudeSession ? .claudeOrange : .stateDriven
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -837,9 +843,13 @@ struct SessionRow: View {
     }
 
     private var providerColor: Color {
-        session.agentName.localizedCaseInsensitiveContains("claude")
+        isClaudeSession
             ? ChimloTheme.providerOrange
             : ChimloTheme.providerBlue
+    }
+
+    private var isClaudeSession: Bool {
+        session.agentName.localizedCaseInsensitiveContains("claude")
     }
 
     private var accessibilitySummary: String {

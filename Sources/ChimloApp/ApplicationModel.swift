@@ -982,7 +982,11 @@ final class ApplicationModel: ObservableObject {
                     title: session.title,
                     titleKind: session.titleKind,
                     isDemo: isDemo,
-                    hasActionableRequest: hasActionableRequest
+                    hasActionableRequest: hasActionableRequest,
+                    hasConversationPreview: session.latestUserPrompt != nil
+                        || session.latestAgentResponse != nil,
+                    agent: session.agent,
+                    model: session.model
                   ) else {
                 return nil
             }

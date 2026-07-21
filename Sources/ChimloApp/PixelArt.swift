@@ -21,12 +21,18 @@ enum AvatarMood: String, CaseIterable, Sendable {
     }
 }
 
+enum PixelAvatarPalette: Equatable, Sendable {
+    case stateDriven
+    case claudeOrange
+}
+
 struct PixelAvatar: View {
     let mood: AvatarMood
     var seed: Int = 0
     var size: CGFloat = 32
     var pixelUnit: CGFloat? = nil
     var reduceMotion = false
+    var palette: PixelAvatarPalette = .stateDriven
 
     var body: some View {
         Group {
@@ -86,7 +92,12 @@ struct PixelAvatar: View {
                     )
                     context.fill(
                         Path(rect),
-                        with: .color(AvatarSprites.color(for: value, mood: mood, seed: seed))
+                        with: .color(AvatarSprites.color(
+                            for: value,
+                            mood: mood,
+                            seed: seed,
+                            palette: palette
+                        ))
                     )
                 }
             }
@@ -95,8 +106,8 @@ struct PixelAvatar: View {
 }
 
 private enum AvatarSprites {
-    // Sprite outlines stay clean neutral white. Hue belongs to state: green for
-    // work/success, amber for waiting, and clay for failure.
+    // Sprite outlines stay clean neutral white. Most avatars use state color;
+    // provider palettes can keep identity stable across every state.
     private enum Palette {
         static let paper = Color(
             nsColor: NSColor(calibratedRed: 0.94, green: 0.94, blue: 0.94, alpha: 1)
@@ -114,6 +125,7 @@ private enum AvatarSprites {
         static let clay = Color(
             nsColor: NSColor(calibratedRed: 0.84, green: 0.34, blue: 0.25, alpha: 1)
         )
+        static let claudeOrange = ChimloTheme.providerOrange
     }
 
     static func sprite(mood: AvatarMood, frame: Int, seed: Int) -> [[Character]] {
@@ -312,19 +324,30 @@ private enum AvatarSprites {
             .map(Array.init)
     }
 
-    static func color(for value: Character, mood: AvatarMood, seed: Int) -> Color {
+    static func color(
+        for value: Character,
+        mood: AvatarMood,
+        seed: Int,
+        palette: PixelAvatarPalette
+    ) -> Color {
         switch value {
         case "K": Palette.paper
         case "W": Palette.ink
-        case "A", "B": primaryColor(for: mood, seed: seed)
-        case "a": accentColor(for: mood)
+        case "A", "B": primaryColor(for: mood, seed: seed, palette: palette)
+        case "a": accentColor(for: mood, palette: palette)
         case "T": Palette.paper
         default: .clear
         }
     }
 
-    private static func primaryColor(for mood: AvatarMood, seed: Int) -> Color {
-        switch mood {
+    private static func primaryColor(
+        for mood: AvatarMood,
+        seed: Int,
+        palette: PixelAvatarPalette
+    ) -> Color {
+        if palette == .claudeOrange { return Palette.claudeOrange }
+
+        return switch mood {
         case .working, .success: Palette.moss
         case .waiting, .question: Palette.amber
         case .failed: Palette.clay
@@ -332,8 +355,13 @@ private enum AvatarSprites {
         }
     }
 
-    private static func accentColor(for mood: AvatarMood) -> Color {
-        switch mood {
+    private static func accentColor(
+        for mood: AvatarMood,
+        palette: PixelAvatarPalette
+    ) -> Color {
+        if palette == .claudeOrange { return Palette.amber }
+
+        return switch mood {
         case .working, .success: Palette.mint
         case .waiting, .question: Palette.clay
         case .failed: Palette.amber
