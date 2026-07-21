@@ -17,44 +17,12 @@ final class IslandPanel: NSPanel {
 }
 
 private final class FullBleedHostingView<Content: View>: NSHostingView<Content> {
-    var pointerPresenceChanged: ((Bool) -> Void)?
-    private var hoverTrackingArea: NSTrackingArea?
-
     override var safeAreaInsets: NSEdgeInsets {
         NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        // .inVisibleRect follows every animated resize. Replacing this area on
-        // each frame can strand AppKit's entered/exited state after collapse,
-        // causing the next hover to be ignored.
-        guard hoverTrackingArea == nil else { return }
-        let trackingArea = NSTrackingArea(
-            rect: .zero,
-            options: [
-                .mouseEnteredAndExited,
-                .activeAlways,
-                .inVisibleRect,
-                .enabledDuringMouseDrag,
-            ],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(trackingArea)
-        hoverTrackingArea = trackingArea
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        pointerPresenceChanged?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        pointerPresenceChanged?(false)
     }
 }
 
@@ -64,6 +32,9 @@ final class IslandWindowCoordinator {
     private let openSettings: () -> Void
     private let panel: IslandPanel
     private var cancellables: Set<AnyCancellable> = []
+    private var globalPointerMonitor: Any?
+    private var localPointerMonitor: Any?
+    private var pointerInsideIntendedFrame = false
 
     init(model: ApplicationModel, openSettings: @escaping () -> Void) {
         self.model = model
@@ -83,6 +54,13 @@ final class IslandWindowCoordinator {
     func show() {
         updateFrame(animated: false)
         panel.orderFrontRegardless()
+    }
+
+    func stop() {
+        if let globalPointerMonitor { NSEvent.removeMonitor(globalPointerMonitor) }
+        if let localPointerMonitor { NSEvent.removeMonitor(localPointerMonitor) }
+        globalPointerMonitor = nil
+        localPointerMonitor = nil
     }
 
     private func configurePanel() {
@@ -115,10 +93,46 @@ final class IslandWindowCoordinator {
         // preserving its old origin. The coordinator owns both size and center.
         hostingView.sizingOptions = []
         hostingView.autoresizingMask = [.width, .height]
-        hostingView.pointerPresenceChanged = { [weak model] inside in
-            model?.pointerPresenceChanged(inside)
-        }
         panel.contentView = hostingView
+        installPointerMonitoring()
+    }
+
+    private func installPointerMonitoring() {
+        let mask: NSEvent.EventTypeMask = [
+            .mouseMoved,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .otherMouseDragged,
+        ]
+
+        globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshPointerPresence()
+            }
+        }
+        localPointerMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.refreshPointerPresence()
+            }
+            return event
+        }
+    }
+
+    private func refreshPointerPresence() {
+        let inside = intendedPanelFrameContainsPointer
+        guard inside != pointerInsideIntendedFrame else { return }
+        pointerInsideIntendedFrame = inside
+        model.pointerPresenceChanged(inside)
+    }
+
+    private var intendedPanelFrameContainsPointer: Bool {
+        guard let screen = targetScreen else { return false }
+        let intendedFrame = IslandGeometry.frame(
+            for: model.panelSize,
+            on: screen,
+            hasCameraHousing: model.islandLayout.hasCameraHousing
+        )
+        return intendedFrame.contains(NSEvent.mouseLocation)
     }
 
     private func observeChanges() {

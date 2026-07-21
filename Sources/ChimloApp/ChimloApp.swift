@@ -37,6 +37,7 @@ final class ChimloAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        islandCoordinator?.stop()
         model.stop()
         islandCoordinator = nil
         settingsCoordinator = nil
