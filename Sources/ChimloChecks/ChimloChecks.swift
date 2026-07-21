@@ -36,6 +36,7 @@ private struct CheckSuite {
         systemFeedback()
         hookPrivacyMapping()
         transcriptMetadataPrivacy()
+        modelDisplayNames()
         sessionArchiveVisibility()
         codexHookConfiguration()
         claudeHookConfiguration()
@@ -325,6 +326,38 @@ private struct CheckSuite {
         expect(!encoded.contains("Implemented the compact three-line layout."), "conversation previews are not persisted")
         expect(!encoded.contains("DO NOT RETAIN"), "transcript discovery discards tool contents")
         expect(!encoded.contains("transcript.jsonl"), "transcript discovery does not persist transcript paths")
+    }
+
+    mutating func modelDisplayNames() {
+        expect(
+            ModelDisplayName.resolve(
+                modelID: "claude-sonnet-5-20260701",
+                agent: .claude
+            ) == "Sonnet 5",
+            "Claude model IDs become concise dynamic names"
+        )
+        expect(
+            ModelDisplayName.resolve(
+                modelID: "claude-opus-4-8-20250514",
+                agent: .claude
+            ) == "Opus 4.8",
+            "Claude minor versions use a readable decimal"
+        )
+        expect(
+            ModelDisplayName.resolve(
+                modelID: "gpt-5.6-sol",
+                agent: .codex,
+                providerDisplayName: "GPT-5.6-Sol"
+            ) == "5.6 Sol",
+            "Codex catalog names stay compact beside the provider label"
+        )
+        expect(
+            ModelDisplayName.resolve(
+                modelID: "gpt-5.3-codex-spark",
+                agent: .codex
+            ) == "5.3 Codex Spark",
+            "Codex compound model families remain readable"
+        )
     }
 
     mutating func claudeHookConfiguration() {

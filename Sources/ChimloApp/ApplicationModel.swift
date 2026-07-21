@@ -155,6 +155,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var pendingDecision: ChimloDecisionRequest?
     @Published private(set) var sessionPermissions: [String: SessionPermissionPresentation] = [:]
     @Published private(set) var sessionQuestions: [String: SessionQuestionPresentation] = [:]
+    @Published private(set) var showsAllSessionsDuringOwnerInteraction = false
     @Published private(set) var islandLayout: IslandLayout
     @Published private(set) var codexConnectionState: AgentConnectionState = .checking
     @Published private(set) var claudeConnectionState: AgentConnectionState = .checking
@@ -215,6 +216,7 @@ final class ApplicationModel: ObservableObject {
     private var latestResponseReceivedAt: [String: Date] = [:]
     private var completionDetailExpiryTasks: [String: Task<Void, Never>] = [:]
     private var lastPresentedResponse: [String: String] = [:]
+    private var codexModelDisplayNames: [String: String] = [:]
     private var systemFeedbackExpiryTask: Task<Void, Never>?
 
     var panelSize: CGSize {
@@ -223,13 +225,20 @@ final class ApplicationModel: ObservableObject {
             return CGSize(width: islandLayout.compactWidth, height: islandLayout.compactHeight)
         case .sessions:
             let responseTextWidth = max(1, islandLayout.expandedWidth - 56)
-            let rowsHeight = sessions.reduce(CGFloat.zero) { partial, session in
+            let rowsHeight = displayedSessions.reduce(CGFloat.zero) { partial, session in
                 partial + session.preferredRowHeight(responseTextWidth: responseTextWidth)
             }
-            let rowSpacing = CGFloat(max(0, sessions.count - 1)) * 6
-            let rowHeight = sessions.isEmpty ? 62 : min(320, rowsHeight + rowSpacing)
+            let rowSpacing = CGFloat(max(0, displayedSessions.count - 1)) * 6
+            let rowHeight: CGFloat
+            if sessions.isEmpty, pendingDecision == nil {
+                rowHeight = 62
+            } else {
+                rowHeight = min(320, rowsHeight + rowSpacing)
+            }
             let decisionHeight: CGFloat = pendingDecision == nil ? 0 : 132
-            let contentHeight = min(366, 12 + rowHeight + decisionHeight)
+            // Includes the LazyVStack gap above the 28-point disclosure control.
+            let revealHeight: CGFloat = canRevealAllSessions ? 34 : 0
+            let contentHeight = min(366, 12 + rowHeight + decisionHeight + revealHeight)
             return CGSize(
                 width: islandLayout.expandedWidth,
                 height: islandLayout.expandedContentTopInset + contentHeight
@@ -237,6 +246,24 @@ final class ApplicationModel: ObservableObject {
         case .onboarding:
             return CGSize(width: 416, height: islandLayout.expandedContentTopInset + 364)
         }
+    }
+
+    var displayedSessions: [SessionDisplayModel] {
+        guard hasActiveOwnerInteraction,
+              !showsAllSessionsDuringOwnerInteraction else { return sessions }
+        if pendingDecision != nil { return [] }
+        return sessions.filter(\.hasActiveOwnerInteraction)
+    }
+
+    var canRevealAllSessions: Bool {
+        hasActiveOwnerInteraction
+            && !showsAllSessionsDuringOwnerInteraction
+            && displayedSessions.count < sessions.count
+    }
+
+    func revealAllSessions() {
+        guard canRevealAllSessions else { return }
+        showsAllSessionsDuringOwnerInteraction = true
     }
 
     var activeMood: AvatarMood {
@@ -262,6 +289,10 @@ final class ApplicationModel: ObservableObject {
         return !sessions.contains {
             $0.needsAttention || $0.mood == .failed
         }
+    }
+
+    private var hasActiveOwnerInteraction: Bool {
+        pendingDecision != nil || sessions.contains(where: \.hasActiveOwnerInteraction)
     }
 
     var serverStatusText: String {
@@ -940,7 +971,11 @@ final class ApplicationModel: ObservableObject {
                 terminal: session.terminal,
                 projectPath: session.projectPath,
                 jumpURL: session.jumpURL,
-                model: session.model,
+                model: ModelDisplayName.resolve(
+                    modelID: session.model,
+                    agent: session.agent,
+                    providerDisplayName: codexModelDisplayName(for: session)
+                ),
                 latestUserPrompt: session.latestUserPrompt,
                 latestAgentResponse: session.latestAgentResponse,
                 latestResponseReceivedAt: latestResponseReceivedAt[session.id],
@@ -956,6 +991,12 @@ final class ApplicationModel: ObservableObject {
             }
             return left.offset < right.offset
         }.map { $0.element }
+        resetSessionRevealIfNoOwnerInteraction()
+    }
+
+    private func resetSessionRevealIfNoOwnerInteraction() {
+        guard !hasActiveOwnerInteraction else { return }
+        showsAllSessionsDuringOwnerInteraction = false
     }
 
     private func configureSessionRuntime() {
@@ -988,6 +1029,16 @@ final class ApplicationModel: ObservableObject {
             codexAppServerConnected = connected
             refreshAgentConnections()
         }
+        codexDesktopAdapter.onModelCatalog = { [weak self] catalog in
+            guard let self, codexModelDisplayNames != catalog else { return }
+            codexModelDisplayNames = catalog
+            syncSessionProjections()
+        }
+    }
+
+    private func codexModelDisplayName(for session: AgentSession) -> String? {
+        guard session.agent == .codex, let model = session.model else { return nil }
+        return codexModelDisplayNames[model.lowercased()]
     }
 
     private func receive(_ candidate: SessionCandidate) {
@@ -1171,6 +1222,7 @@ final class ApplicationModel: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             cancelCollapse()
+            showsAllSessionsDuringOwnerInteraction = false
             pendingDecision = request
             decisionContinuation = continuation
             panelMode = .sessions
@@ -1199,6 +1251,7 @@ final class ApplicationModel: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             cancelCollapse()
+            showsAllSessionsDuringOwnerInteraction = false
             permissionRequests[request.id] = request
             permissionContinuations[request.id] = continuation
             sessionPermissions[request.sessionID] = SessionPermissionPresentation(request: request)
@@ -1314,6 +1367,7 @@ final class ApplicationModel: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             cancelCollapse()
+            showsAllSessionsDuringOwnerInteraction = false
             let flow = QuestionFlow(request: request)
             questionFlows[request.id] = flow
             questionContinuations[request.id] = continuation
@@ -1329,6 +1383,7 @@ final class ApplicationModel: ObservableObject {
             var next = flow
             next.questionIndex += 1
             next.selectedLabels.removeAll()
+            showsAllSessionsDuringOwnerInteraction = false
             questionFlows[next.request.id] = next
             publishQuestion(next)
             presentQuestionEvent(for: next)
@@ -1461,6 +1516,7 @@ final class ApplicationModel: ObservableObject {
         let continuation = decisionContinuation
         decisionContinuation = nil
         pendingDecision = nil
+        resetSessionRevealIfNoOwnerInteraction()
         continuation?.resume(
             returning: ChimloDecisionResponse(
                 requestID: request.id,

@@ -96,6 +96,7 @@ private final class CodexAppServerClient: @unchecked Sendable {
     typealias Completion = @Sendable (Result<JSONObject, Error>) -> Void
 
     var onNotification: (@Sendable (CodexDesktopNotification) -> Void)?
+    var onModelCatalog: (@Sendable ([String: String]) -> Void)?
     var onReady: (@Sendable () -> Void)?
     var onDisconnected: (@Sendable () -> Void)?
 
@@ -159,6 +160,7 @@ private final class CodexAppServerClient: @unchecked Sendable {
                 stop()
             case .success:
                 sendNotification(method: "initialized", params: [:])
+                synchronizeModels()
                 synchronizeLoadedThreads()
             }
         }
@@ -193,6 +195,52 @@ private final class CodexAppServerClient: @unchecked Sendable {
                 synchronizeRecentThreads()
             }
         }
+    }
+
+    private func synchronizeModels(
+        cursor: String? = nil,
+        catalog: [String: String] = [:],
+        page: Int = 0
+    ) {
+        var params: JSONObject = [
+            "includeHidden": true,
+            "limit": 100,
+        ]
+        if let cursor { params["cursor"] = cursor }
+
+        request(method: "model/list", params: params) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(object):
+                var updatedCatalog = catalog
+                for case let model as JSONObject in object["data"] as? [Any] ?? [] {
+                    guard let displayName = Self.nonemptyString(model["displayName"]) else { continue }
+                    for key in [model["id"], model["model"]].compactMap(Self.nonemptyString) {
+                        updatedCatalog[key.lowercased()] = displayName
+                    }
+                }
+
+                if let nextCursor = Self.nonemptyString(object["nextCursor"]), page < 7 {
+                    synchronizeModels(
+                        cursor: nextCursor,
+                        catalog: updatedCatalog,
+                        page: page + 1
+                    )
+                } else if !updatedCatalog.isEmpty {
+                    onModelCatalog?(updatedCatalog)
+                }
+            case .failure:
+                // Older app-server versions may not expose model/list. The
+                // identifier formatter remains available in that case.
+                if !catalog.isEmpty { onModelCatalog?(catalog) }
+            }
+        }
+    }
+
+    private static func nonemptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func readThreads(_ identifiers: [String], index: Int) {
@@ -374,6 +422,7 @@ final class CodexDesktopSessionAdapter {
     var onEvent: ((AgentEvent) -> Void)?
     var onSessionEnded: ((String) -> Void)?
     var onConnectionChanged: ((Bool) -> Void)?
+    var onModelCatalog: (([String: String]) -> Void)?
 
     private var client: CodexAppServerClient?
     private var monitorTask: Task<Void, Never>?
@@ -420,6 +469,9 @@ final class CodexDesktopSessionAdapter {
         self.client = client
         client.onNotification = { [weak self] notification in
             Task { @MainActor [weak self] in self?.handle(notification) }
+        }
+        client.onModelCatalog = { [weak self] catalog in
+            Task { @MainActor [weak self] in self?.onModelCatalog?(catalog) }
         }
         client.onReady = { [weak self] in
             Task { @MainActor [weak self] in self?.onConnectionChanged?(true) }

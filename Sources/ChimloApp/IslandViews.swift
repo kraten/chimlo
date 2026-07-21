@@ -425,11 +425,12 @@ private struct SessionListView: View {
     var body: some View {
         VStack(spacing: 8) {
             if model.sessions.isEmpty {
-                VStack(spacing: 8) {
+                Group {
                     if let decision = model.pendingDecision {
                         LiveDecisionView(decision: decision, model: model)
+                    } else {
+                        EmptySessionView(model: model)
                     }
-                    EmptySessionView(model: model)
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -438,7 +439,7 @@ private struct SessionListView: View {
                         if let decision = model.pendingDecision {
                             LiveDecisionView(decision: decision, model: model)
                         }
-                        ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
+                        ForEach(Array(model.displayedSessions.enumerated()), id: \.element.id) { index, session in
                             SessionRow(
                                 session: session,
                                 seed: index,
@@ -465,11 +466,31 @@ private struct SessionListView: View {
                                 }
                             )
                         }
+
+                        if model.canRevealAllSessions {
+                            Button(action: model.revealAllSessions) {
+                                Text(showAllSessionsLabel)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(ChimloTheme.mutedPaper)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 28)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(
+                                "Shows sessions hidden while this question or approval is active"
+                            )
+                        }
                     }
                 }
                 .scrollIndicators(.hidden)
             }
         }
+    }
+
+    private var showAllSessionsLabel: String {
+        let count = model.sessions.count
+        return count == 1 ? "Show all 1 session" : "Show all \(count) sessions"
     }
 }
 
