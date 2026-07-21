@@ -89,8 +89,14 @@ final class IslandWindowCoordinator {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        // Configure floating behavior before restoring the status-bar level.
+        // AppKit otherwise treats this as a movable desktop window during a
+        // Space transition and can carry/scale it with the outgoing desktop.
+        panel.isFloatingPanel = true
+        panel.isMovable = false
         // Keep Chimlo above WindowServer's menu-bar layer so the visible wings
-        // receive real pointer events. isFloatingPanel would reset this to 3.
+        // receive real pointer events. isFloatingPanel resets this to 3, so the
+        // explicit level assignment must remain after it.
         panel.level = .statusBar
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true

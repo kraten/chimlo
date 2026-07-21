@@ -7,7 +7,7 @@ security issues are taken seriously.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, report vulnerabilities by emailing **[INSERT SECURITY EMAIL]** with:
+Instead, report vulnerabilities by emailing **kratenhq@gmail.com** with:
 
 1. A description of the vulnerability
 2. Steps to reproduce (or a proof of concept)
