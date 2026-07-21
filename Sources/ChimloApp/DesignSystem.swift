@@ -3,32 +3,42 @@ import ChimloCore
 import SwiftUI
 
 enum ChimloTheme {
-    // The island is deliberately neutral. Color is reserved for live state,
-    // provider identity, and errors so session text remains the focal point.
+    // The camera silhouette stays true black. Normal elevation is a neutral
+    // graphite ladder so hover and detail surfaces never drift brown. Color is
+    // reserved for provider identity and real working/attention/failure state.
     static let ink = Color.black
-    static let raisedInk = Color(nsColor: NSColor(calibratedWhite: 0.065, alpha: 1))
-    static let selectedInk = Color(nsColor: NSColor(calibratedWhite: 0.095, alpha: 1))
-    static let badgeInk = Color(nsColor: NSColor(calibratedWhite: 0.105, alpha: 1))
-    static let hoveredBadgeInk = Color(nsColor: NSColor(calibratedWhite: 0.16, alpha: 1))
-    static let paper = Color(nsColor: NSColor(calibratedWhite: 0.96, alpha: 1))
-    static let quietPaper = Color(nsColor: NSColor(calibratedWhite: 0.61, alpha: 1))
-    static let mutedPaper = Color(nsColor: NSColor(calibratedWhite: 0.36, alpha: 1))
+    static let raisedInk = color(red: 0x0F, green: 0x0F, blue: 0x0F)
+    static let selectedInk = color(red: 0x1C, green: 0x1C, blue: 0x1C)
+    static let badgeInk = color(red: 0x19, green: 0x19, blue: 0x19)
+    static let hoveredBadgeInk = color(red: 0x2A, green: 0x2A, blue: 0x2A)
+    static let rowHoverInk = color(red: 0x12, green: 0x12, blue: 0x12)
+    static let rowHoverEdge = color(red: 0x26, green: 0x26, blue: 0x26)
+    static let attentionInk = color(red: 0x16, green: 0x16, blue: 0x16)
+    static let raisedAttentionInk = color(red: 0x29, green: 0x29, blue: 0x29)
+    static let failureInk = color(red: 0x16, green: 0x16, blue: 0x16)
+    static let raisedFailureInk = color(red: 0x29, green: 0x29, blue: 0x29)
+    static let paper = color(red: 0xF0, green: 0xF0, blue: 0xF0)
+    static let quietPaper = color(red: 0xA8, green: 0xA8, blue: 0xA8)
+    static let mutedPaper = color(red: 0x7D, green: 0x7D, blue: 0x7D)
     static let liveGreen = Color(
-        nsColor: NSColor(calibratedRed: 0.14, green: 0.87, blue: 0.44, alpha: 1)
+        nsColor: NSColor(calibratedRed: 0.37, green: 0.76, blue: 0.42, alpha: 1)
     )
     static let providerBlue = Color(
-        nsColor: NSColor(calibratedRed: 0.22, green: 0.52, blue: 0.93, alpha: 1)
+        nsColor: NSColor(calibratedRed: 0.42, green: 0.57, blue: 0.83, alpha: 1)
     )
     static let providerOrange = Color(
-        nsColor: NSColor(calibratedRed: 0.78, green: 0.43, blue: 0.28, alpha: 1)
+        nsColor: NSColor(calibratedRed: 0.88, green: 0.54, blue: 0.30, alpha: 1)
+    )
+    static let attention = Color(
+        nsColor: NSColor(calibratedRed: 0.94, green: 0.59, blue: 0.28, alpha: 1)
     )
     static let clay = Color(
-        nsColor: NSColor(calibratedRed: 0.78, green: 0.32, blue: 0.29, alpha: 1)
+        nsColor: NSColor(calibratedRed: 0.78, green: 0.29, blue: 0.23, alpha: 1)
     )
     static let clayText = Color(
-        nsColor: NSColor(calibratedRed: 0.86, green: 0.42, blue: 0.39, alpha: 1)
+        nsColor: NSColor(calibratedRed: 0.90, green: 0.42, blue: 0.34, alpha: 1)
     )
-    static let amber = liveGreen
+    static let amber = attention
     static let moss = liveGreen
     static let focusRing = Color(nsColor: .keyboardFocusIndicatorColor)
 
@@ -37,7 +47,18 @@ enum ChimloTheme {
     }
 
     static func raisedSurface(increasedContrast: Bool) -> Color {
-        increasedContrast ? Color(nsColor: NSColor(calibratedWhite: 0.12, alpha: 1)) : raisedInk
+        increasedContrast ? color(red: 0x24, green: 0x24, blue: 0x24) : raisedInk
+    }
+
+    private static func color(red: Int, green: Int, blue: Int) -> Color {
+        Color(
+            nsColor: NSColor(
+                calibratedRed: CGFloat(red) / 255,
+                green: CGFloat(green) / 255,
+                blue: CGFloat(blue) / 255,
+                alpha: 1
+            )
+        )
     }
 }
 

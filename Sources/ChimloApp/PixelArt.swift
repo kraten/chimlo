@@ -81,7 +81,10 @@ struct PixelAvatar: View {
                         width: unit,
                         height: unit
                     )
-                    context.fill(Path(rect), with: .color(AvatarSprites.color(for: value, seed: seed)))
+                    context.fill(
+                        Path(rect),
+                        with: .color(AvatarSprites.color(for: value, mood: mood, seed: seed))
+                    )
                 }
             }
         }
@@ -89,21 +92,24 @@ struct PixelAvatar: View {
 }
 
 private enum AvatarSprites {
-    // Keep the original character palette independent from the island theme.
-    // UI color changes should never silently redesign the avatar artwork.
+    // Sprite outlines stay clean neutral white. Hue belongs to state: green for
+    // work/success, amber for waiting, and clay for failure.
     private enum Palette {
         static let paper = Color(
-            nsColor: NSColor(calibratedRed: 0.94, green: 0.925, blue: 0.87, alpha: 1)
+            nsColor: NSColor(calibratedRed: 0.94, green: 0.94, blue: 0.94, alpha: 1)
         )
-        static let ink = Color(nsColor: NSColor(calibratedWhite: 0.035, alpha: 1))
+        static let ink = Color(nsColor: NSColor(calibratedWhite: 0.025, alpha: 1))
         static let amber = Color(
-            nsColor: NSColor(calibratedRed: 0.83, green: 0.64, blue: 0.31, alpha: 1)
+            nsColor: NSColor(calibratedRed: 0.94, green: 0.59, blue: 0.28, alpha: 1)
         )
         static let moss = Color(
-            nsColor: NSColor(calibratedRed: 0.48, green: 0.62, blue: 0.42, alpha: 1)
+            nsColor: NSColor(calibratedRed: 0.37, green: 0.76, blue: 0.42, alpha: 1)
+        )
+        static let mint = Color(
+            nsColor: NSColor(calibratedRed: 0.70, green: 0.87, blue: 0.73, alpha: 1)
         )
         static let clay = Color(
-            nsColor: NSColor(calibratedRed: 0.68, green: 0.36, blue: 0.29, alpha: 1)
+            nsColor: NSColor(calibratedRed: 0.84, green: 0.34, blue: 0.25, alpha: 1)
         )
     }
 
@@ -272,15 +278,32 @@ private enum AvatarSprites {
             .map(Array.init)
     }
 
-    static func color(for value: Character, seed: Int) -> Color {
+    static func color(for value: Character, mood: AvatarMood, seed: Int) -> Color {
         switch value {
         case "K": Palette.paper
         case "W": Palette.ink
-        case "A": seed.isMultiple(of: 2) ? Palette.amber : Palette.moss
-        case "a": Palette.clay
-        case "B": seed.isMultiple(of: 3) ? Palette.moss : Palette.amber
+        case "A", "B": primaryColor(for: mood, seed: seed)
+        case "a": accentColor(for: mood)
         case "T": Palette.paper
         default: .clear
+        }
+    }
+
+    private static func primaryColor(for mood: AvatarMood, seed: Int) -> Color {
+        switch mood {
+        case .working, .success: Palette.moss
+        case .waiting: Palette.amber
+        case .failed: Palette.clay
+        case .idle: seed.isMultiple(of: 2) ? Palette.amber : Palette.moss
+        }
+    }
+
+    private static func accentColor(for mood: AvatarMood) -> Color {
+        switch mood {
+        case .working, .success: Palette.mint
+        case .waiting: Palette.clay
+        case .failed: Palette.amber
+        case .idle: Palette.paper
         }
     }
 }

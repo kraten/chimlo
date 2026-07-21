@@ -160,8 +160,8 @@ private struct SystemFeedbackNotchBand: View {
 
             HStack(spacing: 0) {
                 PixelSystemGlyph(kind: glyphKind, size: 16)
-                    .padding(.trailing, min(10, max(0, wingWidth - 16)))
-                    .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
+                    .padding(.leading, expandedHorizontalGutter)
+                    .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
                     .clipped()
 
                 Color.clear
@@ -169,8 +169,8 @@ private struct SystemFeedbackNotchBand: View {
                     .accessibilityHidden(true)
 
                 PixelLevelMeter(value: feedback.value, reduceMotion: reduceMotion)
-                    .padding(.leading, min(10, max(0, wingWidth - 23)))
-                    .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
+                    .padding(.trailing, expandedHorizontalGutter)
+                    .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
                     .clipped()
             }
         }
@@ -448,7 +448,7 @@ private struct LiveDecisionView: View {
                     reduceMotion: model.accessibility.reduceMotion
                 )
                 VStack(alignment: .leading, spacing: 3) {
-                    PixelText(text: "YOUR CALL", pixelSize: 1.2, color: ChimloTheme.paper, spacing: 1)
+                    PixelText(text: "YOUR CALL", pixelSize: 1.2, color: ChimloTheme.attention, spacing: 1)
                     Text(decision.title)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(ChimloTheme.paper)
@@ -478,7 +478,11 @@ private struct LiveDecisionView: View {
             }
         }
         .padding(11)
-        .background(ChimloTheme.raisedSurface(increasedContrast: model.accessibility.increaseContrast))
+        .background(
+            model.accessibility.increaseContrast
+                ? ChimloTheme.raisedAttentionInk
+                : ChimloTheme.attentionInk
+        )
         .clipShape(SteppedPanelShape())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Decision needed. \(decision.title). \(decision.message)")
@@ -529,6 +533,14 @@ struct SessionRow: View {
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(
+                    isHovering ? ChimloTheme.rowHoverEdge : .clear,
+                    lineWidth: 1
+                )
+                .allowsHitTesting(false)
+        }
         .onHover { hovering in
             if reduceMotion {
                 isHovering = hovering
@@ -596,7 +608,7 @@ struct SessionRow: View {
                 } else {
                     Text(session.detail)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .foregroundStyle(statusDetailColor)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -604,13 +616,13 @@ struct SessionRow: View {
                 if let response = session.latestAgentResponse {
                     Text(response)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .foregroundStyle(statusDetailColor)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if session.latestUserPrompt != nil {
                     Text(session.detail)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .foregroundStyle(statusDetailColor)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -715,9 +727,21 @@ struct SessionRow: View {
     }
 
     private var cardBackground: Color {
-        isHovering
-            ? ChimloTheme.selectedInk
-            : .clear
+        if isHovering { return ChimloTheme.rowHoverInk }
+
+        switch session.mood {
+        case .waiting: return ChimloTheme.attentionInk
+        case .failed: return ChimloTheme.failureInk
+        case .idle, .working, .success: return .clear
+        }
+    }
+
+    private var statusDetailColor: Color {
+        switch session.mood {
+        case .waiting: ChimloTheme.attention
+        case .failed: ChimloTheme.clayText
+        case .idle, .working, .success: ChimloTheme.quietPaper
+        }
     }
 
     private var providerColor: Color {
@@ -754,7 +778,7 @@ private struct SessionMessageButtonStyle: ButtonStyle {
 
     private func background(isPressed: Bool) -> Color {
         if isPressed { return ChimloTheme.badgeInk }
-        if isHovering { return ChimloTheme.selectedInk }
+        if isHovering { return ChimloTheme.rowHoverInk }
         return .clear
     }
 }
