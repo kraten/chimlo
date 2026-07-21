@@ -7,6 +7,7 @@ APP_DIR="$PROJECT_DIR/dist/Chimlo.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 HELPERS_DIR="$CONTENTS_DIR/Helpers"
+source "$SCRIPT_DIR/signing-common.sh"
 
 cd "$PROJECT_DIR"
 ./Scripts/swift.sh build -c release --product ChimloApp
@@ -27,9 +28,15 @@ cp "$BIN_DIR/chimlo" "$HELPERS_DIR/chimlo"
 chmod 755 "$MACOS_DIR/Chimlo" "$HELPERS_DIR/chimlo"
 
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - "$HELPERS_DIR/chimlo"
-  codesign --force --sign - "$APP_DIR"
-  codesign --verify --deep --strict "$APP_DIR"
+  chimlo_configure_signing
+  chimlo_sign_app_bundle "$APP_DIR"
+
+  if [[ "$CHIMLO_SIGNING_MODE" == "adhoc" ]]; then
+    print -u2 "Warning: Chimlo was signed ad hoc. Accessibility permission may reset after a rebuild."
+    print -u2 "Run 'make signing-identity' once to install a stable local identity."
+  else
+    print "Signed with: $CHIMLO_ACTIVE_SIGNING_IDENTITY"
+  fi
 fi
 
 echo "$APP_DIR"

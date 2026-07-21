@@ -1,4 +1,4 @@
-.PHONY: app build check test clean
+.PHONY: app build check test signing-check signing-identity clean
 
 build:
 	./Scripts/swift.sh build
@@ -11,6 +11,12 @@ check:
 
 app:
 	./Scripts/package-app.sh
+
+signing-identity:
+	./Scripts/setup-local-signing.sh
+
+signing-check: app
+	./Scripts/check-stable-signing.sh
 
 clean:
 	swift package clean

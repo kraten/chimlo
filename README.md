@@ -63,9 +63,16 @@ make check
 To build a standalone `.app` bundle:
 
 ```sh
+make signing-identity # one-time; keeps Accessibility permission stable across builds
 make app
 open dist/Chimlo.app
 ```
+
+The signing setup creates a dedicated local keychain, imports a non-exportable
+private key, and restricts certificate trust to code signing. Contributors can
+skip it, but ad-hoc builds may need Accessibility permission again whenever their
+executable changes. Run `make signing-check` to prove two different builds keep
+the same designated code requirement.
 
 ---
 

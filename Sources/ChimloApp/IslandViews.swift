@@ -617,7 +617,7 @@ struct SessionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 10)
+        .padding(.trailing, 10)
         .padding(.vertical, 8)
         .frame(minHeight: 62)
         .frame(maxWidth: .infinity, alignment: .leading)
