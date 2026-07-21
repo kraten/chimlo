@@ -23,6 +23,7 @@ struct PixelAvatar: View {
     let mood: AvatarMood
     var seed: Int = 0
     var size: CGFloat = 32
+    var pixelUnit: CGFloat? = nil
     var reduceMotion = false
 
     var body: some View {
@@ -60,7 +61,11 @@ struct PixelAvatar: View {
             let sprite = AvatarSprites.sprite(mood: mood, frame: frame, seed: seed)
             let columns = sprite.first?.count ?? 1
             let rows = sprite.count
-            let unit = floor(min(canvasSize.width / CGFloat(columns), canvasSize.height / CGFloat(rows)))
+            let availableUnit = min(
+                canvasSize.width / CGFloat(columns),
+                canvasSize.height / CGFloat(rows)
+            )
+            let unit = min(pixelUnit ?? floor(availableUnit), availableUnit)
             let drawingWidth = unit * CGFloat(columns)
             let drawingHeight = unit * CGFloat(rows)
             let origin = CGPoint(

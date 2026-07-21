@@ -2,6 +2,8 @@ import ChimloCore
 import ChimloProtocol
 import SwiftUI
 
+private let expandedHorizontalGutter: CGFloat = 16
+
 struct IslandRootView: View {
     @ObservedObject var model: ApplicationModel
     let openSettings: () -> Void
@@ -21,7 +23,7 @@ struct IslandRootView: View {
                         ExpandedStatusBand(model: model, openSettings: openSettings)
                     }
                     SessionListView(model: model)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, expandedHorizontalGutter)
                         .padding(.top, model.islandLayout.expandedContentTopInset + 2)
                         .padding(.bottom, 10)
                         .frame(width: model.panelSize.width)
@@ -91,7 +93,7 @@ private struct ExpandedStatusBand: View {
 
                     HStack(spacing: 0) {
                         PixelText(text: "CHIMLO", pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
-                            .padding(.leading, 10)
+                            .padding(.leading, expandedHorizontalGutter)
                             .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
                             .clipped()
                             .accessibilityHidden(true)
@@ -124,7 +126,7 @@ private struct ExpandedStatusBand: View {
                             .help("Open Chimlo settings")
                             .accessibilityLabel("Open Chimlo settings")
                         }
-                        .padding(.trailing, 7)
+                        .padding(.trailing, expandedHorizontalGutter)
                         .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
                         .clipped()
                     }
@@ -344,9 +346,11 @@ private struct CompactIslandView: View {
             PixelAvatar(
                 mood: model.activeMood,
                 seed: model.sessions.first?.id.hashValue ?? 0,
-                size: 19,
+                size: 17,
+                pixelUnit: 1.4,
                 reduceMotion: model.accessibility.reduceMotion
             )
+            .offset(x: 1.5)
             .frame(
                 width: model.islandLayout.activityWingWidth,
                 height: model.islandLayout.compactHeight,
@@ -502,7 +506,7 @@ struct SessionRow: View {
     }
 
     private var summaryCard: some View {
-        HStack(alignment: .top, spacing: 0) {
+        ZStack(alignment: .topTrailing) {
             Group {
                 if let onOpen {
                     Button(action: onOpen) {
@@ -519,7 +523,7 @@ struct SessionRow: View {
                         .accessibilityLabel(accessibilitySummary)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             trailingControls
         }
@@ -553,17 +557,24 @@ struct SessionRow: View {
                     SessionMetadataBadge(
                         text: session.agentName,
                         foreground: providerColor,
-                        background: providerColor.opacity(0.15)
+                        background: providerColor.opacity(isHovering ? 0.24 : 0.15)
                     )
 
                     if let model = session.model, !model.isEmpty {
-                        SessionMetadataBadge(text: model)
+                        SessionMetadataBadge(
+                            text: model,
+                            background: neutralBadgeBackground
+                        )
                     }
 
                     if let terminal = session.terminal, !terminal.isEmpty {
-                        SessionMetadataBadge(text: terminal)
+                        SessionMetadataBadge(
+                            text: terminal,
+                            background: neutralBadgeBackground
+                        )
                     }
                 }
+                .padding(.trailing, trailingControlInset)
 
                 if let prompt = session.latestUserPrompt {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -574,18 +585,20 @@ struct SessionRow: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(ChimloTheme.quietPaper)
                             .lineLimit(1)
-                        Spacer(minLength: 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         if session.isDemo {
                             Text("Preview")
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundStyle(ChimloTheme.mutedPaper)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text(session.detail)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(ChimloTheme.quietPaper)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if let response = session.latestAgentResponse {
@@ -593,14 +606,16 @@ struct SessionRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(ChimloTheme.quietPaper)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else if session.latestUserPrompt != nil {
                     Text(session.detail)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(ChimloTheme.quietPaper)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -616,7 +631,8 @@ struct SessionRow: View {
                 Button(action: onArchive) {
                     Image(systemName: "archivebox")
                         .font(.system(size: 12, weight: .medium))
-                        .frame(width: 26, height: 28)
+                        .offset(x: 3)
+                        .frame(width: 20, height: 28)
                 }
                 .buttonStyle(SessionArchiveButtonStyle())
                 .help("Archive in Chimlo")
@@ -626,15 +642,31 @@ struct SessionRow: View {
             if let onOpen {
                 Button(action: onOpen) {
                     PixelJumpMark(color: ChimloTheme.mutedPaper)
-                        .frame(width: 26, height: 28)
+                        .frame(width: 20, height: 28)
                 }
                 .buttonStyle(.plain)
                 .help("Open source session")
                 .accessibilityLabel("Open \(session.displayTitle) in the source app")
             }
         }
-        .padding(.top, 3)
+        .padding(.top, trailingControlsTopPadding)
         .padding(.trailing, 6)
+    }
+
+    private var trailingControlInset: CGFloat {
+        let controlCount = (onArchive == nil ? 0 : 1) + (onOpen == nil ? 0 : 1)
+        guard controlCount > 0 else { return 0 }
+        return CGFloat(controlCount * 20 - 4)
+    }
+
+    private var neutralBadgeBackground: Color {
+        isHovering ? ChimloTheme.hoveredBadgeInk : ChimloTheme.badgeInk
+    }
+
+    private var trailingControlsTopPadding: CGFloat {
+        let hasConversationPreview = session.latestUserPrompt != nil
+            || session.latestAgentResponse != nil
+        return hasConversationPreview ? 3 : 9
     }
 
     private var completionDetails: some View {

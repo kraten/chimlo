@@ -9,6 +9,7 @@ enum ChimloTheme {
     static let raisedInk = Color(nsColor: NSColor(calibratedWhite: 0.065, alpha: 1))
     static let selectedInk = Color(nsColor: NSColor(calibratedWhite: 0.095, alpha: 1))
     static let badgeInk = Color(nsColor: NSColor(calibratedWhite: 0.105, alpha: 1))
+    static let hoveredBadgeInk = Color(nsColor: NSColor(calibratedWhite: 0.16, alpha: 1))
     static let paper = Color(nsColor: NSColor(calibratedWhite: 0.96, alpha: 1))
     static let quietPaper = Color(nsColor: NSColor(calibratedWhite: 0.61, alpha: 1))
     static let mutedPaper = Color(nsColor: NSColor(calibratedWhite: 0.36, alpha: 1))
