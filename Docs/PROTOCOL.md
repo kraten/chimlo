@@ -76,6 +76,20 @@ Safety rules are absolute:
 - A late response cannot resolve a newer request.
 - The native terminal interaction remains available.
 
+## Claude Code questions
+
+`question_request` carries one to four provider-authored questions with bounded
+labels, descriptions, and choices. The app keeps this payload in memory and
+keys the visible form to the originating session. A correlated
+`question_response` contains an explicit answer map or an unavailable outcome.
+
+The blocking Claude helper accepts only `PreToolUse:AskUserQuestion`. On an
+explicit answer it echoes Claude's original `questions` array and adds the
+answer map to `updatedInput`. Any cancellation, invalid option, timeout, app
+shutdown, authentication failure, or transport error returns `{}` so Claude
+Code presents its native question instead. Question payloads and answers never
+enter Chimlo's persisted session registry.
+
 ## Payload limits
 
 The implementation bounds frames before allocation. Adapters should further cap

@@ -92,7 +92,12 @@ public enum PrivacySafeHookMapper {
         switch hookName {
         case "SessionStart":
             return Mapping(kind: .sessionStarted, detail: "Connected locally")
-        case "UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStart":
+        case "UserPromptSubmit", "PostToolUse", "SubagentStart":
+            return Mapping(kind: .activity, detail: "Working")
+        case "PreToolUse":
+            // AskUserQuestion has a separate blocking bridge. The asynchronous
+            // observer must not race it and clear the pending question state.
+            guard toolName != "AskUserQuestion" else { return nil }
             return Mapping(kind: .activity, detail: "Working")
         case "PermissionRequest":
             return permissionMapping(toolName: toolName, source: source)

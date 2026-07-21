@@ -21,6 +21,7 @@ final class ProtocolBridge {
     func start(
         receive: @escaping @MainActor @Sendable (AgentEvent) -> Void,
         decide: @escaping @MainActor @Sendable (ChimloDecisionRequest) async -> ChimloDecisionResponse,
+        answer: @escaping @MainActor @Sendable (ProviderQuestionRequest) async -> ProviderQuestionResponse,
         stateChanged: @escaping @MainActor @Sendable (LocalServerState) -> Void
     ) {
         stop()
@@ -36,6 +37,9 @@ final class ProtocolBridge {
                     },
                     decisionHandler: { request in
                         await decide(request)
+                    },
+                    questionHandler: { request in
+                        await answer(request)
                     }
                 )
                 self.server = server

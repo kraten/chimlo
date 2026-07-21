@@ -352,6 +352,11 @@ private struct CheckSuite {
                 mergedText.contains("leave-this-alone") && mergedText.contains("\"theme\""),
                 "Claude observer merge preserves unrelated settings and hooks"
             )
+            expect(
+                mergedText.contains(ClaudeHookConfiguration.questionMarker)
+                    && mergedText.contains("AskUserQuestion"),
+                "Claude question bridge is installed as a blocking AskUserQuestion hook"
+            )
 
             let repeated = try ClaudeHookConfiguration.merging(
                 existingData: merged.data,
@@ -369,7 +374,8 @@ private struct CheckSuite {
             let removedText = String(decoding: removed.data, as: UTF8.self)
             expect(
                 removed.changed && removedText.contains("existing-observer")
-                    && !removedText.contains(ClaudeHookConfiguration.marker),
+                    && !removedText.contains(ClaudeHookConfiguration.marker)
+                    && !removedText.contains(ClaudeHookConfiguration.questionMarker),
                 "Claude observer removal is marker scoped"
             )
         } catch {

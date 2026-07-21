@@ -5,6 +5,7 @@ enum AvatarMood: String, CaseIterable, Sendable {
     case idle
     case working
     case waiting
+    case question
     case success
     case failed
 
@@ -13,6 +14,7 @@ enum AvatarMood: String, CaseIterable, Sendable {
         case .idle: "Idle"
         case .working: "Working"
         case .waiting: "Waiting for you"
+        case .question: "Asking you a question"
         case .success: "Finished"
         case .failed: "Stopped with an error"
         }
@@ -46,6 +48,7 @@ struct PixelAvatar: View {
         case .idle: 0.72
         case .working: 0.16
         case .waiting: 0.34
+        case .question: 0.34
         case .success: 0.24
         case .failed: 0.42
         }
@@ -209,6 +212,37 @@ private enum AvatarSprites {
                 ............
                 """,
             ]
+        case .question:
+            frames = [
+                """
+                .........TT.
+                ....KK.....T
+                ...KAAK...T.
+                ..KAAAaK.T..
+                ..KWKWWK....
+                ..KWWWWK....
+                ..KBBBBK.T..
+                ..KBBBBK....
+                ..KBBBBK....
+                ..KBBBBK....
+                ..KK..KK....
+                ............
+                """,
+                """
+                ............
+                .........TT.
+                ....KK.....T
+                ...KAAK...T.
+                ..KAAAaK.T..
+                ..KWWKWK....
+                ..KWWWWK....
+                ..KBBBBK.T..
+                ..KBBBBK....
+                ..KBBBBK....
+                ..KK..KK....
+                ............
+                """,
+            ]
         case .success:
             frames = [
                 """
@@ -292,7 +326,7 @@ private enum AvatarSprites {
     private static func primaryColor(for mood: AvatarMood, seed: Int) -> Color {
         switch mood {
         case .working, .success: Palette.moss
-        case .waiting: Palette.amber
+        case .waiting, .question: Palette.amber
         case .failed: Palette.clay
         case .idle: seed.isMultiple(of: 2) ? Palette.amber : Palette.moss
         }
@@ -301,7 +335,7 @@ private enum AvatarSprites {
     private static func accentColor(for mood: AvatarMood) -> Color {
         switch mood {
         case .working, .success: Palette.mint
-        case .waiting: Palette.clay
+        case .waiting, .question: Palette.clay
         case .failed: Palette.amber
         case .idle: Palette.paper
         }

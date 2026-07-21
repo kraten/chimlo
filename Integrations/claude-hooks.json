@@ -36,6 +36,16 @@
             "timeout": 2
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude question # chimlo-claude-question",
+            "timeout": 600
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ChimloCore
 @testable import ChimloProtocol
 
 @Suite("Wire protocol")
@@ -65,5 +66,32 @@ struct WireProtocolTests {
         #expect(!ChimloDecisionOutcome.denied.isApproved)
         #expect(!ChimloDecisionOutcome.cancelled.isApproved)
         #expect(!ChimloDecisionOutcome.unavailable.isApproved)
+    }
+
+    @Test("Question requests round-trip with their options")
+    func questionRequestRoundTrip() throws {
+        let request = ProviderQuestionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000009")!,
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            questions: [ProviderQuestion(
+                prompt: "Which target?",
+                header: "Target",
+                options: [
+                    ProviderQuestionOption(label: "Local", detail: "This Mac"),
+                    ProviderQuestionOption(label: "Staging", detail: "Shared environment"),
+                ]
+            )]
+        )
+        let envelope = ChimloEnvelope(
+            sentAt: Date(timeIntervalSince1970: 1_700_000_100),
+            authenticationToken: String(repeating: "b", count: 64),
+            message: .questionRequest(request)
+        )
+
+        let decoded = try ChimloFrameCodec.decode(ChimloFrameCodec.encode(envelope))
+
+        #expect(decoded == envelope)
     }
 }

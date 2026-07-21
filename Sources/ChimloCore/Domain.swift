@@ -72,6 +72,95 @@ public struct AgentQuestion: Codable, Equatable, Sendable {
     }
 }
 
+/// A provider-authored choice shown transiently while the provider is blocked
+/// for input. Question content is intentionally excluded from Chimlo's session
+/// archive and local registry.
+public struct ProviderQuestionOption: Codable, Equatable, Sendable {
+    public let label: String
+    public let detail: String?
+
+    public init(label: String, detail: String? = nil) {
+        self.label = label
+        self.detail = detail
+    }
+}
+
+public struct ProviderQuestion: Codable, Equatable, Sendable {
+    public let prompt: String
+    public let header: String?
+    public let options: [ProviderQuestionOption]
+    public let allowsMultipleSelections: Bool
+
+    public init(
+        prompt: String,
+        header: String? = nil,
+        options: [ProviderQuestionOption],
+        allowsMultipleSelections: Bool = false
+    ) {
+        self.prompt = prompt
+        self.header = header
+        self.options = options
+        self.allowsMultipleSelections = allowsMultipleSelections
+    }
+}
+
+public struct ProviderQuestionRequest: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let sessionID: String
+    public let agent: AgentKind
+    public let title: String
+    public let questions: [ProviderQuestion]
+    public let expiresAt: Date?
+
+    public init(
+        id: UUID = UUID(),
+        sessionID: String,
+        agent: AgentKind,
+        title: String,
+        questions: [ProviderQuestion],
+        expiresAt: Date? = nil
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.agent = agent
+        self.title = title
+        self.questions = questions
+        self.expiresAt = expiresAt
+    }
+}
+
+public enum ProviderQuestionOutcome: String, Codable, Equatable, Sendable {
+    case answered
+    case cancelled
+    case unavailable
+}
+
+public struct ProviderQuestionResponse: Codable, Equatable, Sendable {
+    public let requestID: UUID
+    public let outcome: ProviderQuestionOutcome
+    public let answers: [String: String]
+    public let note: String?
+    public let resolvedAt: Date
+
+    public init(
+        requestID: UUID,
+        outcome: ProviderQuestionOutcome,
+        answers: [String: String] = [:],
+        note: String? = nil,
+        resolvedAt: Date = Date()
+    ) {
+        self.requestID = requestID
+        self.outcome = outcome
+        self.answers = answers
+        self.note = note
+        self.resolvedAt = resolvedAt
+    }
+
+    public static func unavailable(for requestID: UUID, reason: String? = nil) -> Self {
+        Self(requestID: requestID, outcome: .unavailable, note: reason)
+    }
+}
+
 public enum PendingRequest: Codable, Equatable, Sendable {
     case approval(ApprovalRequest)
     case question(AgentQuestion)

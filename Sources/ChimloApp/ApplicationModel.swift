@@ -20,6 +20,7 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     var latestUserPrompt: String?
     var latestAgentResponse: String?
     var latestResponseReceivedAt: Date?
+    var question: SessionQuestionPresentation?
 
     var displayTitle: String {
         guard let projectPath else { return title }
@@ -43,6 +44,13 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     }
 
     func preferredRowHeight(responseTextWidth: CGFloat) -> CGFloat {
+        if let question {
+            let optionHeight = question.question.options.reduce(CGFloat.zero) { height, option in
+                height + (option.detail == nil ? 34 : 50)
+            }
+            let selectionFooter: CGFloat = question.question.allowsMultipleSelections ? 36 : 20
+            return 70 + 50 + optionHeight + selectionFooter
+        }
         guard showsCompletedConversation,
               let latestUserPrompt,
               let latestAgentResponse else { return 70 }
@@ -96,6 +104,17 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     }
 }
 
+struct SessionQuestionPresentation: Identifiable, Equatable, Sendable {
+    let requestID: UUID
+    let sessionID: String
+    let questionIndex: Int
+    let questionCount: Int
+    let question: ProviderQuestion
+    let selectedLabels: [String]
+
+    var id: UUID { requestID }
+}
+
 enum PanelMode: Equatable, Sendable {
     case compact
     case sessions
@@ -118,6 +137,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var accessibility = AccessibilityEnvironment.current
     @Published private(set) var serverState: LocalServerState = .stopped
     @Published private(set) var pendingDecision: ChimloDecisionRequest?
+    @Published private(set) var sessionQuestions: [String: SessionQuestionPresentation] = [:]
     @Published private(set) var islandLayout: IslandLayout
     @Published private(set) var codexConnectionState: AgentConnectionState = .checking
     @Published private(set) var claudeConnectionState: AgentConnectionState = .checking
@@ -161,6 +181,9 @@ final class ApplicationModel: ObservableObject {
     private var pointerInsideIsland = false
     private var decisionExpiryTask: Task<Void, Never>?
     private var decisionContinuation: CheckedContinuation<ChimloDecisionResponse, Never>?
+    private var questionFlows: [UUID: QuestionFlow] = [:]
+    private var questionContinuations: [UUID: CheckedContinuation<ProviderQuestionResponse, Never>] = [:]
+    private var questionExpiryTasks: [UUID: Task<Void, Never>] = [:]
     private var protocolBridge: ProtocolBridge?
     private var hasStarted = false
     private lazy var integrationManager = AgentIntegrationManager.live()
@@ -205,6 +228,7 @@ final class ApplicationModel: ObservableObject {
 
     var compactLabel: String {
         if pendingDecision != nil || sessions.contains(where: { $0.mood == .waiting }) { return "WAIT" }
+        if sessions.contains(where: { $0.mood == .question }) { return "ASK" }
         if sessions.contains(where: { $0.mood == .failed }) { return "STOP" }
         if sessions.contains(where: { $0.mood == .working }) { return "WORK" }
         if sessions.contains(where: { $0.mood == .success }) { return "DONE" }
@@ -347,6 +371,12 @@ final class ApplicationModel: ObservableObject {
                 }
                 return await self.requestDecision(request)
             },
+            answer: { [weak self] request in
+                guard let self else {
+                    return .unavailable(for: request.id, reason: "Chimlo is closing")
+                }
+                return await self.requestQuestion(request)
+            },
             stateChanged: { [weak self] state in
                 self?.serverStateChanged(state)
             }
@@ -382,6 +412,7 @@ final class ApplicationModel: ObservableObject {
         systemFeedback = nil
         mediaPlayback.stop()
         finishPendingDecision(outcome: .unavailable, note: "Chimlo closed before a decision was made")
+        finishAllPendingQuestions(note: "Chimlo closed before an answer was selected")
         protocolBridge?.stop()
         protocolBridge = nil
         localSessionRuntime.stop()
@@ -416,6 +447,7 @@ final class ApplicationModel: ObservableObject {
             pointerInside: pointerInsideIsland,
             isSessionPanel: panelMode == .sessions,
             hasBlockingDecision: pendingDecision != nil
+                || !sessionQuestions.isEmpty
         ) else { return }
         collapseTask?.cancel()
         collapseTask = Task { [weak self] in
@@ -425,6 +457,7 @@ final class ApplicationModel: ObservableObject {
                     pointerInside: pointerInsideIsland,
                     isSessionPanel: panelMode == .sessions,
                     hasBlockingDecision: pendingDecision != nil
+                        || !sessionQuestions.isEmpty
                   ) else { return }
             panelMode = .compact
             collapseTask = nil
@@ -610,8 +643,11 @@ final class ApplicationModel: ObservableObject {
         alert.alertStyle = .informational
         alert.messageText = "Connect \(provider.displayName) to Chimlo?"
         let filename = provider == .codex ? "hooks.json" : "settings.json"
-        alert.informativeText = "Review the complete merged \(filename) below. Existing settings stay in place, and Chimlo keeps a one-time backup before writing."
-        alert.addButton(withTitle: "Add observer")
+        let questionNote = provider == .claude
+            ? " Claude questions route through Chimlo while it is running; Claude Code remains the fallback."
+            : ""
+        alert.informativeText = "Review the complete merged \(filename) below. Existing settings stay in place, and Chimlo keeps a one-time backup before writing.\(questionNote)"
+        alert.addButton(withTitle: "Connect")
         alert.addButton(withTitle: "Cancel")
 
         let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 560, height: 250))
@@ -636,6 +672,49 @@ final class ApplicationModel: ObservableObject {
 
     func respondToPendingDecision(approved: Bool) {
         finishPendingDecision(outcome: approved ? .approved : .denied, note: nil)
+    }
+
+    func selectQuestionOption(sessionID: String, label: String) {
+        guard let presentation = sessionQuestions[sessionID],
+              var flow = questionFlows[presentation.requestID],
+              let option = flow.currentQuestion.options.first(where: { $0.label == label }) else {
+            return
+        }
+
+        if flow.currentQuestion.allowsMultipleSelections {
+            if flow.selectedLabels.contains(option.label) {
+                flow.selectedLabels.remove(option.label)
+            } else {
+                flow.selectedLabels.insert(option.label)
+            }
+            questionFlows[flow.request.id] = flow
+            publishQuestion(flow)
+        } else {
+            flow.answers[flow.currentQuestion.prompt] = option.label
+            advanceOrFinish(flow)
+        }
+    }
+
+    func submitQuestionSelections(sessionID: String) {
+        guard let presentation = sessionQuestions[sessionID],
+              var flow = questionFlows[presentation.requestID],
+              flow.currentQuestion.allowsMultipleSelections,
+              !flow.selectedLabels.isEmpty else { return }
+        let ordered = flow.currentQuestion.options.compactMap { option in
+            flow.selectedLabels.contains(option.label) ? option.label : nil
+        }
+        flow.answers[flow.currentQuestion.prompt] = ordered.joined(separator: ", ")
+        advanceOrFinish(flow)
+    }
+
+    func answerQuestionInClaudeCode(sessionID: String) {
+        guard let requestID = sessionQuestions[sessionID]?.requestID else { return }
+        finishQuestion(
+            requestID: requestID,
+            outcome: .cancelled,
+            answers: [:],
+            note: "Answering in Claude Code"
+        )
     }
 
     func open(_ session: SessionDisplayModel) {
@@ -810,7 +889,8 @@ final class ApplicationModel: ObservableObject {
                 model: session.model,
                 latestUserPrompt: session.latestUserPrompt,
                 latestAgentResponse: session.latestAgentResponse,
-                latestResponseReceivedAt: latestResponseReceivedAt[session.id]
+                latestResponseReceivedAt: latestResponseReceivedAt[session.id],
+                question: sessionQuestions[session.id]
             )
         }
     }
@@ -999,8 +1079,10 @@ final class ApplicationModel: ObservableObject {
         switch session.phase {
         case .working:
             return .working
-        case .waitingForApproval, .waitingForAnswer:
+        case .waitingForApproval:
             return .waiting
+        case .waitingForAnswer:
+            return .question
         case .completed:
             return .success
         case .failed:
@@ -1030,6 +1112,147 @@ final class ApplicationModel: ObservableObject {
             decisionContinuation = continuation
             panelMode = .sessions
             scheduleDecisionExpiry(for: request)
+        }
+    }
+
+    private func requestQuestion(_ request: ProviderQuestionRequest) async -> ProviderQuestionResponse {
+        if let expiresAt = request.expiresAt, expiresAt <= Date() {
+            return .unavailable(for: request.id, reason: "Question request expired")
+        }
+        guard !request.questions.isEmpty,
+              request.questions.allSatisfy({ !$0.prompt.isEmpty && !$0.options.isEmpty }),
+              sessionQuestions[request.sessionID] == nil else {
+            return .unavailable(for: request.id, reason: "This session already has a pending question")
+        }
+
+        return await withCheckedContinuation { continuation in
+            cancelCollapse()
+            let flow = QuestionFlow(request: request)
+            questionFlows[request.id] = flow
+            questionContinuations[request.id] = continuation
+            publishQuestion(flow)
+            presentQuestionEvent(for: flow)
+            panelMode = .sessions
+            scheduleQuestionExpiry(for: request)
+        }
+    }
+
+    private func advanceOrFinish(_ flow: QuestionFlow) {
+        if flow.questionIndex + 1 < flow.request.questions.count {
+            var next = flow
+            next.questionIndex += 1
+            next.selectedLabels.removeAll()
+            questionFlows[next.request.id] = next
+            publishQuestion(next)
+            presentQuestionEvent(for: next)
+        } else {
+            finishQuestion(
+                requestID: flow.request.id,
+                outcome: .answered,
+                answers: flow.answers,
+                note: nil
+            )
+        }
+    }
+
+    private func publishQuestion(_ flow: QuestionFlow) {
+        sessionQuestions[flow.request.sessionID] = SessionQuestionPresentation(
+            requestID: flow.request.id,
+            sessionID: flow.request.sessionID,
+            questionIndex: flow.questionIndex,
+            questionCount: flow.request.questions.count,
+            question: flow.currentQuestion,
+            selectedLabels: flow.currentQuestion.options.compactMap { option in
+                flow.selectedLabels.contains(option.label) ? option.label : nil
+            }
+        )
+        syncSessionProjections()
+    }
+
+    private func presentQuestionEvent(for flow: QuestionFlow) {
+        receiveLiveEvent(
+            AgentEvent(
+                sessionID: flow.request.sessionID,
+                sequence: 0,
+                kind: .questionRequested,
+                agent: flow.request.agent,
+                title: flow.request.title,
+                detail: "Question from Claude Code",
+                request: .question(
+                    AgentQuestion(
+                        id: "\(flow.request.id.uuidString)-\(flow.questionIndex)",
+                        prompt: flow.currentQuestion.prompt,
+                        options: flow.currentQuestion.options.map(\.label)
+                    )
+                ),
+                timestamp: .now
+            )
+        )
+    }
+
+    private func scheduleQuestionExpiry(for request: ProviderQuestionRequest) {
+        guard let expiresAt = request.expiresAt else { return }
+        let nanoseconds = UInt64(max(0, expiresAt.timeIntervalSinceNow) * 1_000_000_000)
+        questionExpiryTasks[request.id] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.finishQuestion(
+                requestID: request.id,
+                outcome: .unavailable,
+                answers: [:],
+                note: "Question request expired"
+            )
+        }
+    }
+
+    private func finishQuestion(
+        requestID: UUID,
+        outcome: ProviderQuestionOutcome,
+        answers: [String: String],
+        note: String?
+    ) {
+        guard let flow = questionFlows.removeValue(forKey: requestID) else { return }
+        questionExpiryTasks.removeValue(forKey: requestID)?.cancel()
+        sessionQuestions.removeValue(forKey: flow.request.sessionID)
+
+        if let current = reducer.sessions[flow.request.sessionID] {
+            consume(
+                AgentEvent(
+                    sessionID: current.id,
+                    sequence: current.lastSequence + 1,
+                    kind: .questionResolved,
+                    agent: current.agent,
+                    detail: outcome == .answered ? "Answer sent to Claude Code" : "Answer in Claude Code",
+                    decision: outcome == .answered
+                        ? .answer(answers.values.joined(separator: ", "))
+                        : nil,
+                    timestamp: .now
+                ),
+                isDemo: false
+            )
+        } else {
+            syncSessionProjections()
+        }
+
+        let continuation = questionContinuations.removeValue(forKey: requestID)
+        continuation?.resume(returning: ProviderQuestionResponse(
+            requestID: requestID,
+            outcome: outcome,
+            answers: answers,
+            note: note
+        ))
+        scheduleCollapseAfterHover()
+    }
+
+    private func finishAllPendingQuestions(note: String) {
+        let requestIDs = Array(questionFlows.keys)
+        for requestID in requestIDs {
+            finishQuestion(
+                requestID: requestID,
+                outcome: .unavailable,
+                answers: [:],
+                note: note
+            )
         }
     }
 
@@ -1151,6 +1374,17 @@ final class ApplicationModel: ObservableObject {
         static let keepPreviewSession = "chimlo.preview.keepSession"
         static let replacesSystemFeedback = "chimlo.systemFeedback.replacesNative"
         static let archivedSessions = "chimlo.sessions.archived"
+    }
+
+    private struct QuestionFlow {
+        let request: ProviderQuestionRequest
+        var questionIndex = 0
+        var answers: [String: String] = [:]
+        var selectedLabels: Set<String> = []
+
+        var currentQuestion: ProviderQuestion {
+            request.questions[questionIndex]
+        }
     }
 }
 

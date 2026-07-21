@@ -30,6 +30,8 @@ Chimlo sits at the top of your display — a persistent, glanceable status surfa
 
 🤖 **Multi-agent awareness** — Tracks Codex and Claude Code sessions simultaneously with unified local discovery.
 
+❓ **Answer Claude in place:** Shows Claude Code's real multiple-choice questions and sends the selected option back to the blocked session.
+
 🎨 **Pixel art characters** — Original animated sprites for idle, working, waiting, done, and failed states.
 
 🔒 **Privacy-first** — Prompts, transcripts, and session content never leave your Mac. Telemetry is absent by default.
@@ -85,7 +87,7 @@ Chimlo discovers local agent sessions through four complementary signals — no 
 | **App-server metadata** | Codex desktop app task lifecycle |
 | **Process liveness** | Terminal process discovery + working directory |
 | **JSONL metadata** | Incremental reads of Codex/Claude session records |
-| **Command hooks** | Codex and Claude Code observation hooks |
+| **Command hooks** | Codex and Claude Code observers plus the narrow Claude question bridge |
 
 ### Connect Codex
 
@@ -93,7 +95,7 @@ Open **Chimlo Settings → Connect** to preview and install marked observers int
 
 ### Connect Claude Code
 
-Open **Chimlo Settings → Connect** beside Claude Code to preview and install marked observers into `~/.claude/settings.json`. The same preservation, backup, and marker-scoped removal rules apply.
+Open **Chimlo Settings → Connect** beside Claude Code to preview and install marked observers plus the `AskUserQuestion` bridge into `~/.claude/settings.json`. The same preservation, backup, fail-safe fallback, and marker-scoped removal rules apply.
 
 📖 Full details in [Docs/AGENT_HOOKS.md](Docs/AGENT_HOOKS.md)
 

@@ -5,10 +5,12 @@ import Network
 public final class ChimloServer: @unchecked Sendable {
     public typealias EventHandler = @Sendable (AgentEvent) async -> Void
     public typealias DecisionHandler = @Sendable (ChimloDecisionRequest) async -> ChimloDecisionResponse
+    public typealias QuestionHandler = @Sendable (ProviderQuestionRequest) async -> ProviderQuestionResponse
 
     private let descriptorStore: RuntimeDescriptorStore
     private let eventHandler: EventHandler
     private let decisionHandler: DecisionHandler
+    private let questionHandler: QuestionHandler
     private let authenticationToken: String
     private let queue = DispatchQueue(label: "dev.chimlo.protocol.server", qos: .userInitiated)
     private let lock = NSLock()
@@ -20,11 +22,15 @@ public final class ChimloServer: @unchecked Sendable {
         eventHandler: @escaping EventHandler,
         decisionHandler: @escaping DecisionHandler = { request in
             .unavailable(for: request.id, reason: "No decision handler is configured")
+        },
+        questionHandler: @escaping QuestionHandler = { request in
+            .unavailable(for: request.id, reason: "No question handler is configured")
         }
     ) throws {
         self.descriptorStore = try descriptorStore ?? .live()
         self.eventHandler = eventHandler
         self.decisionHandler = decisionHandler
+        self.questionHandler = questionHandler
         self.authenticationToken = try SecureAuthenticationToken.generate()
     }
 
@@ -158,9 +164,20 @@ public final class ChimloServer: @unchecked Sendable {
                 )
             }
             return .decisionResponse(response)
+        case let .questionRequest(request):
+            if let expiresAt = request.expiresAt, expiresAt <= Date() {
+                return .questionResponse(.unavailable(for: request.id, reason: "Question request expired"))
+            }
+            let response = await questionHandler(request)
+            guard response.requestID == request.id else {
+                return .questionResponse(
+                    .unavailable(for: request.id, reason: "Question handler returned a mismatched request identifier")
+                )
+            }
+            return .questionResponse(response)
         case .ping:
             return .acknowledgement(.init(acknowledgedMessageID: envelope.messageID))
-        case .decisionResponse, .acknowledgement, .error:
+        case .decisionResponse, .questionResponse, .acknowledgement, .error:
             return .error(.init(code: .invalidRequest, message: "Message type is not accepted by the server"))
         }
     }
@@ -208,6 +225,21 @@ public struct ChimloClient: Sendable {
             guard case let .decisionResponse(response) = message,
                   response.requestID == request.id else {
                 return .unavailable(for: request.id, reason: "Chimlo returned an invalid decision response")
+            }
+            return response
+        } catch {
+            return .unavailable(for: request.id, reason: error.localizedDescription)
+        }
+    }
+
+    /// Question transport also fails back to the provider. A missing or stale
+    /// Chimlo process never fabricates an answer.
+    public func requestQuestion(_ request: ProviderQuestionRequest) async -> ProviderQuestionResponse {
+        do {
+            let message = try await exchange(.questionRequest(request), messageID: UUID())
+            guard case let .questionResponse(response) = message,
+                  response.requestID == request.id else {
+                return .unavailable(for: request.id, reason: "Chimlo returned an invalid question response")
             }
             return response
         } catch {

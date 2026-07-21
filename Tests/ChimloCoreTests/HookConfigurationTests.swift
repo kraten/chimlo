@@ -73,6 +73,9 @@ struct ClaudeHookConfigurationTests {
         let text = String(decoding: plan.data, as: UTF8.self)
         #expect(text.contains("my-observer"))
         #expect(text.contains("leave-this-alone"))
+        #expect(text.contains(ClaudeHookConfiguration.questionMarker))
+        #expect(text.contains("AskUserQuestion"))
+        #expect(text.contains("\"timeout\" : 600"))
     }
 
     @Test("Claude merge is idempotent and removal is marker scoped")
@@ -86,5 +89,43 @@ struct ClaudeHookConfigurationTests {
         #expect(removed.changed)
         #expect(try ClaudeHookConfiguration.installationState(in: removed.data, helperPath: helperPath) == .missing)
         #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.marker))
+        #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.questionMarker))
+    }
+
+    @Test("A non-blocking or broad question hook requires repair")
+    func unsafeQuestionRegistrationNeedsRepair() throws {
+        let installed = try ClaudeHookConfiguration.merging(
+            existingData: nil,
+            helperPath: helperPath
+        )
+        var root = try #require(JSONSerialization.jsonObject(with: installed.data) as? [String: Any])
+        var hooks = try #require(root["hooks"] as? [String: Any])
+        var preToolUse = try #require(hooks["PreToolUse"] as? [[String: Any]])
+        let questionIndex = try #require(preToolUse.firstIndex { group in
+            let commands = (group["hooks"] as? [[String: Any]] ?? [])
+                .compactMap { $0["command"] as? String }
+            return commands.contains(where: { $0.contains(ClaudeHookConfiguration.questionMarker) })
+        })
+        preToolUse[questionIndex]["matcher"] = "*"
+        var questionHooks = try #require(preToolUse[questionIndex]["hooks"] as? [[String: Any]])
+        questionHooks[0]["async"] = true
+        preToolUse[questionIndex]["hooks"] = questionHooks
+        hooks["PreToolUse"] = preToolUse
+        root["hooks"] = hooks
+        let unsafe = try JSONSerialization.data(withJSONObject: root)
+
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: unsafe,
+            helperPath: helperPath
+        ) == .needsRepair)
+        let repaired = try ClaudeHookConfiguration.merging(
+            existingData: unsafe,
+            helperPath: helperPath
+        )
+        #expect(repaired.changed)
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: repaired.data,
+            helperPath: helperPath
+        ) == .current)
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ChimloCore
 @testable import ChimloProtocol
 
 @Suite("Network transport", .serialized)
@@ -50,5 +51,73 @@ struct NetworkTransportTests {
 
         #expect(response.outcome == .unavailable)
         #expect(!response.outcome.isApproved)
+    }
+
+    @Test("Question selections round-trip through the loopback server")
+    func questionSelectionsRoundTrip() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chimlo-network-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RuntimeDescriptorStore(descriptorURL: directory.appendingPathComponent("runtime.json"))
+        let server = try ChimloServer(
+            descriptorStore: store,
+            eventHandler: { _ in },
+            questionHandler: { request in
+                ProviderQuestionResponse(
+                    requestID: request.id,
+                    outcome: .answered,
+                    answers: ["Which target?": "Local"]
+                )
+            }
+        )
+        defer { server.stop() }
+        _ = try await server.start()
+        let client = try ChimloClient(descriptorStore: store, timeout: .seconds(1))
+        let request = ProviderQuestionRequest(
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            questions: [ProviderQuestion(
+                prompt: "Which target?",
+                options: [
+                    ProviderQuestionOption(label: "Local"),
+                    ProviderQuestionOption(label: "Staging"),
+                ]
+            )]
+        )
+
+        let response = await client.requestQuestion(request)
+
+        #expect(response.outcome == .answered)
+        #expect(response.answers["Which target?"] == "Local")
+    }
+
+    @Test("A server without a question handler returns unavailable")
+    func serverDefaultsQuestionsToUnavailable() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chimlo-network-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RuntimeDescriptorStore(descriptorURL: directory.appendingPathComponent("runtime.json"))
+        let server = try ChimloServer(descriptorStore: store, eventHandler: { _ in })
+        defer { server.stop() }
+        _ = try await server.start()
+        let client = try ChimloClient(descriptorStore: store, timeout: .seconds(1))
+        let request = ProviderQuestionRequest(
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            questions: [ProviderQuestion(
+                prompt: "Continue?",
+                options: [
+                    ProviderQuestionOption(label: "Yes"),
+                    ProviderQuestionOption(label: "No"),
+                ]
+            )]
+        )
+
+        let response = await client.requestQuestion(request)
+
+        #expect(response.outcome == .unavailable)
+        #expect(response.answers.isEmpty)
     }
 }

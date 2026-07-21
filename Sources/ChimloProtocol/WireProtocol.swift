@@ -91,6 +91,8 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
     case event(AgentEvent)
     case decisionRequest(ChimloDecisionRequest)
     case decisionResponse(ChimloDecisionResponse)
+    case questionRequest(ProviderQuestionRequest)
+    case questionResponse(ProviderQuestionResponse)
     case acknowledgement(ChimloAcknowledgement)
     case ping
     case error(ChimloRemoteError)
@@ -104,6 +106,8 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
         case event
         case decisionRequest = "decision_request"
         case decisionResponse = "decision_response"
+        case questionRequest = "question_request"
+        case questionResponse = "question_response"
         case acknowledgement
         case ping
         case error
@@ -119,6 +123,10 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
             self = .decisionRequest(try container.decode(ChimloDecisionRequest.self, forKey: .payload))
         case .decisionResponse:
             self = .decisionResponse(try container.decode(ChimloDecisionResponse.self, forKey: .payload))
+        case .questionRequest:
+            self = .questionRequest(try container.decode(ProviderQuestionRequest.self, forKey: .payload))
+        case .questionResponse:
+            self = .questionResponse(try container.decode(ProviderQuestionResponse.self, forKey: .payload))
         case .acknowledgement:
             self = .acknowledgement(try container.decode(ChimloAcknowledgement.self, forKey: .payload))
         case .ping:
@@ -139,6 +147,12 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
             try container.encode(request, forKey: .payload)
         case let .decisionResponse(response):
             try container.encode(MessageType.decisionResponse, forKey: .type)
+            try container.encode(response, forKey: .payload)
+        case let .questionRequest(request):
+            try container.encode(MessageType.questionRequest, forKey: .type)
+            try container.encode(request, forKey: .payload)
+        case let .questionResponse(response):
+            try container.encode(MessageType.questionResponse, forKey: .type)
             try container.encode(response, forKey: .payload)
         case let .acknowledgement(acknowledgement):
             try container.encode(MessageType.acknowledgement, forKey: .type)

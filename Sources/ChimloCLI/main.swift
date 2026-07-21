@@ -38,7 +38,7 @@ enum ChimloCommand {
             let options = try Options(Array(arguments.dropFirst()))
             try await requestDecision(options: options)
         case "hook":
-            await observeProviderHook(Array(arguments.dropFirst()))
+            await handleProviderHook(Array(arguments.dropFirst()))
         case "descriptor":
             let store = try RuntimeDescriptorStore.live()
             let descriptor = try store.read()
@@ -57,14 +57,27 @@ enum ChimloCommand {
         }
     }
 
-    /// Provider hooks must never block or break the invoking coding agent.
-    /// `{}` is the documented no-op response; delivery failure is intentionally
-    /// silent and leaves the native provider UI authoritative.
-    private static func observeProviderHook(_ arguments: [String]) async {
-        defer { print("{}") }
+    private static func handleProviderHook(_ arguments: [String]) async {
         guard arguments.count == 2,
-              arguments[1] == "observe",
-              let source = ProviderHookSource(rawValue: arguments[0]) else { return }
+              let source = ProviderHookSource(rawValue: arguments[0]) else {
+            print("{}")
+            return
+        }
+        if source == .claude, arguments[1] == "question" {
+            await answerClaudeQuestionHook()
+        } else {
+            await observeProviderHook(arguments, source: source)
+        }
+    }
+
+    /// Observation hooks never block or break the invoking coding agent. `{}`
+    /// is Claude and Codex's documented no-op response.
+    private static func observeProviderHook(
+        _ arguments: [String],
+        source: ProviderHookSource
+    ) async {
+        defer { print("{}") }
+        guard arguments[1] == "observe" else { return }
 
         do {
             guard let data = try FileHandle.standardInput.read(
@@ -77,6 +90,26 @@ enum ChimloCommand {
             // Observation is best-effort. Never turn a missing Chimlo process,
             // malformed hook, or local transport error into an agent failure.
         }
+    }
+
+    /// AskUserQuestion is the one provider hook Chimlo intentionally keeps
+    /// blocking. An explicit answer becomes Claude's updated tool input. Every
+    /// failure prints `{}`, which hands the question back to Claude's native UI.
+    private static func answerClaudeQuestionHook() async {
+        guard let data = try? FileHandle.standardInput.read(
+            upToCount: ClaudeQuestionHook.maximumPayloadBytes + 1
+        ), data.count <= ClaudeQuestionHook.maximumPayloadBytes,
+              let hook = try? ClaudeQuestionHook(
+                data: data,
+                expiresAt: Date().addingTimeInterval(590)
+              ),
+              let client = try? ChimloClient(timeout: .seconds(595)) else {
+            FileHandle.standardOutput.write(ClaudeQuestionHook.fallbackOutput)
+            return
+        }
+
+        let response = await client.requestQuestion(hook.request)
+        FileHandle.standardOutput.write(hook.output(for: response))
     }
 
     private static func makeEvent(options: Options) throws -> AgentEvent {
@@ -279,6 +312,7 @@ enum ChimloCommand {
       chimlo ping
       chimlo decision --title TEXT --message TEXT [options]
       chimlo hook codex|claude observe < hook.json
+      chimlo hook claude question < hook.json
       chimlo descriptor
 
     Common emit options:

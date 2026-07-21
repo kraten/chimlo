@@ -33,6 +33,8 @@ focus. The app runtime has three narrow adapters:
   terminal processes, reconciles liveness, and persists a small local cache.
 - `AgentIntegrationManager` installs and repairs the stable helper plus marked
   Codex and Claude observer entries after a complete preview and confirmation.
+  Claude's separately marked `AskUserQuestion` hook is synchronous and routes
+  transient choices through the same authenticated listener.
 
 ## ChimloCLI
 
@@ -42,7 +44,8 @@ helper writes only the response format required by the invoking agent to stdout.
 
 ## Safety boundaries
 
-- Pending decisions are keyed by request and session, not screen position.
+- Pending decisions and questions are keyed by request and session, not screen
+  position.
 - Duplicate messages and stale per-session sequence numbers are ignored.
 - Payloads and frames have explicit size limits.
 - Runtime descriptors are private to the local user and short lived.
@@ -51,6 +54,8 @@ helper writes only the response format required by the invoking agent to stdout.
   replacement, marker-scoped uninstall, and an explicit user action.
 - Persisted session entries contain only provider, title, generic status, model,
   project path, terminal label, jump URL, phase, and timestamps.
+- Claude question text, option descriptions, and selected answers exist only in
+  memory for the lifetime of the blocking hook request.
 
 ## Installer seam
 

@@ -441,7 +441,16 @@ private struct SessionListView: View {
                                 onOpen: session.jumpURL == nil ? nil : { model.open(session) },
                                 onArchive: session.needsAttention || session.isDemo
                                     ? nil
-                                    : { model.archiveSession(session) }
+                                    : { model.archiveSession(session) },
+                                onQuestionOption: { label in
+                                    model.selectQuestionOption(sessionID: session.id, label: label)
+                                },
+                                onSubmitQuestion: {
+                                    model.submitQuestionSelections(sessionID: session.id)
+                                },
+                                onAnswerInClaude: {
+                                    model.answerQuestionInClaudeCode(sessionID: session.id)
+                                }
                             )
                         }
                     }
@@ -514,11 +523,23 @@ struct SessionRow: View {
     let increasedContrast: Bool
     var onOpen: (() -> Void)? = nil
     var onArchive: (() -> Void)? = nil
+    var onQuestionOption: ((String) -> Void)? = nil
+    var onSubmitQuestion: (() -> Void)? = nil
+    var onAnswerInClaude: (() -> Void)? = nil
     @State private var isHovering = false
 
     var body: some View {
         VStack(spacing: 8) {
             summaryCard
+
+            if let question = session.question {
+                SessionQuestionView(
+                    presentation: question,
+                    select: { onQuestionOption?($0) },
+                    submit: { onSubmitQuestion?() },
+                    answerInClaude: { onAnswerInClaude?() }
+                )
+            }
 
             if session.showsCompletedConversation {
                 completionDetails
@@ -749,7 +770,7 @@ struct SessionRow: View {
         if isHovering { return ChimloTheme.rowHoverInk }
 
         switch session.mood {
-        case .waiting: return ChimloTheme.attentionInk
+        case .waiting, .question: return ChimloTheme.attentionInk
         case .failed: return ChimloTheme.failureInk
         case .idle, .working, .success: return .clear
         }
@@ -757,7 +778,7 @@ struct SessionRow: View {
 
     private var statusDetailColor: Color {
         switch session.mood {
-        case .waiting: ChimloTheme.attention
+        case .waiting, .question: ChimloTheme.attention
         case .failed: ChimloTheme.clayText
         case .idle, .working, .success: ChimloTheme.quietPaper
         }
@@ -773,6 +794,175 @@ struct SessionRow: View {
         let prompt = session.latestUserPrompt.map { "User prompt: \($0)." } ?? ""
         let response = session.latestAgentResponse ?? session.detail
         return "\(session.agentName), \(session.displayTitle), \(session.mood.accessibilityDescription). \(prompt) Latest response: \(response)"
+    }
+}
+
+private struct SessionQuestionView: View {
+    let presentation: SessionQuestionPresentation
+    let select: (String) -> Void
+    let submit: () -> Void
+    let answerInClaude: () -> Void
+
+    private var question: ProviderQuestion { presentation.question }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(question.header ?? "Claude asks")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ChimloTheme.providerOrange)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                if presentation.questionCount > 1 {
+                    Text("\(presentation.questionIndex + 1) of \(presentation.questionCount)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(ChimloTheme.mutedPaper)
+                        .monospacedDigit()
+                }
+            }
+
+            Text(question.prompt)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ChimloTheme.paper)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 5) {
+                ForEach(question.options, id: \.label) { option in
+                    Button {
+                        select(option.label)
+                    } label: {
+                        HStack(alignment: .center, spacing: 8) {
+                            if question.allowsMultipleSelections {
+                                PixelChoiceMark(
+                                    selected: presentation.selectedLabels.contains(option.label)
+                                )
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.label)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(ChimloTheme.paper)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if let detail = option.detail {
+                                    Text(detail)
+                                        .font(.system(size: 10, weight: .regular))
+                                        .foregroundStyle(ChimloTheme.quietPaper)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, option.detail == nil ? 7 : 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(QuestionOptionButtonStyle(
+                        selected: presentation.selectedLabels.contains(option.label)
+                    ))
+                    .accessibilityHint(
+                        question.allowsMultipleSelections
+                            ? "Toggles this answer"
+                            : "Sends this answer to Claude Code"
+                    )
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button("Answer in Claude Code", action: answerInClaude)
+                    .buttonStyle(QuestionFallbackButtonStyle())
+
+                Spacer(minLength: 8)
+
+                if question.allowsMultipleSelections {
+                    Button(submitLabel, action: submit)
+                        .buttonStyle(ChimloButtonStyle(kind: .primary, compact: true))
+                        .disabled(presentation.selectedLabels.isEmpty)
+                } else {
+                    Text("Choose an option to continue")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(ChimloTheme.mutedPaper)
+                }
+            }
+        }
+        // The stepped top-left cut is six points. Twelve points of leading
+        // padding keeps every glyph and control fully inside the live region.
+        .padding(.top, 10)
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .padding(.bottom, 10)
+        .background(ChimloTheme.attentionInk)
+        .clipShape(SteppedPanelShape())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Claude Code asks: \(question.prompt)")
+    }
+
+    private var submitLabel: String {
+        let count = presentation.selectedLabels.count
+        return count == 1 ? "Send 1 answer" : "Send \(count) answers"
+    }
+}
+
+private struct QuestionOptionButtonStyle: ButtonStyle {
+    let selected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(background(isPressed: configuration.isPressed))
+            .clipShape(SteppedPanelShape())
+            .contentShape(Rectangle())
+    }
+
+    private func background(isPressed: Bool) -> Color {
+        if isPressed { return ChimloTheme.hoveredBadgeInk }
+        if selected { return ChimloTheme.raisedAttentionInk }
+        return ChimloTheme.raisedInk
+    }
+}
+
+private struct QuestionFallbackButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(
+                configuration.isPressed ? ChimloTheme.paper : ChimloTheme.quietPaper
+            )
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+    }
+}
+
+private struct PixelChoiceMark: View {
+    let selected: Bool
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .nonLinear, rendersAsynchronously: false) { context, _ in
+            let unit: CGFloat = 2
+            let points = selected
+                ? [
+                    CGPoint(x: 0, y: 2), CGPoint(x: 1, y: 3), CGPoint(x: 2, y: 2),
+                    CGPoint(x: 3, y: 1), CGPoint(x: 4, y: 0),
+                ]
+                : [
+                    CGPoint(x: 0, y: 0), CGPoint(x: 4, y: 0),
+                    CGPoint(x: 0, y: 4), CGPoint(x: 4, y: 4),
+                ]
+            for point in points {
+                context.fill(
+                    Path(CGRect(
+                        x: point.x * unit,
+                        y: point.y * unit,
+                        width: unit,
+                        height: unit
+                    )),
+                    with: .color(selected ? ChimloTheme.attention : ChimloTheme.mutedPaper)
+                )
+            }
+        }
+        .frame(width: 10, height: 10)
+        .accessibilityHidden(true)
     }
 }
 

@@ -24,7 +24,10 @@ The helper reads one hook payload from standard input, keeps only the opaque
 session ID, provider, project basename, model label, hook kind, and safe tool
 category, and sends that small event to Chimlo's authenticated loopback
 listener. Prompt text, assistant text, transcript paths, tool inputs, tool
-outputs, environment values, and file contents are not retained.
+outputs, environment values, and file contents are not retained. The one
+deliberate exception is Claude Code's `AskUserQuestion`: its question and
+choices live in memory only while Claude is blocked for an answer. They are
+never written to Chimlo's session cache or archive.
 
 The JSONL scanner follows the same boundary. It extracts only session ID,
 workspace path, model label, timestamp, and lifecycle record type. Reads are
@@ -53,14 +56,25 @@ validation, repair, and marker-scoped removal rules used for Codex apply here.
 [`Integrations/claude-hooks.json`](../Integrations/claude-hooks.json) remains
 available as a manual merge fragment. Replace `/Users/YOU` with the local home
 path and never replace the whole settings file. Observation hooks are
-asynchronous where Claude supports it.
+asynchronous where Claude supports it. Chimlo also adds one narrow, synchronous
+`PreToolUse` hook matching only `AskUserQuestion`. It waits for a choice in
+Chimlo and returns the original question plus the selected answer through Claude
+Code's documented `updatedInput` contract. If Chimlo is closed, unreachable, or
+times out, the hook returns no decision and Claude Code shows its native
+question UI.
 
-## Permission behavior
+## Questions and permission behavior
 
-The first open-source adapter is mirror-only. Chimlo shows that Codex or Claude
-Code is waiting, while the complete action and the authoritative Allow or Deny
-control remain in the provider's own terminal UI. A missing app, timeout,
-malformed payload, or transport error can never imply approval.
+Claude Code multiple-choice questions can be answered directly in Chimlo. A
+single-select choice is sent immediately; multi-select questions require an
+explicit Send action. **Answer in Claude Code** releases the hook without an
+answer so the native prompt takes over.
+
+Tool permissions remain mirror-only. Chimlo shows that Codex or Claude Code is
+waiting, while the complete action and the authoritative Allow or Deny control
+remain in the provider's own terminal UI. A missing app, timeout, malformed
+payload, or transport error can never imply approval or fabricate an answer.
 
 The helper reserves stdout for the provider's hook response. It emits `{}` for
-observation and exits successfully even when Chimlo is unavailable.
+observation and for any unanswered question fallback, and exits successfully
+even when Chimlo is unavailable.

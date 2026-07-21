@@ -242,6 +242,7 @@ public struct ClaudeHookConfigurationPlan: Equatable, Sendable {
 /// value level.
 public enum ClaudeHookConfiguration {
     public static let marker = "# chimlo-claude-observer"
+    public static let questionMarker = "# chimlo-claude-question"
 
     private struct EventSpec {
         let name: String
@@ -267,6 +268,10 @@ public enum ClaudeHookConfiguration {
         "\(shellQuoted(helperPath)) hook claude observe \(marker)"
     }
 
+    public static func questionCommand(helperPath: String) -> String {
+        "\(shellQuoted(helperPath)) hook claude question \(questionMarker)"
+    }
+
     public static func installationState(
         in data: Data?,
         helperPath: String
@@ -279,6 +284,7 @@ public enum ClaudeHookConfiguration {
         }
 
         let expected = observerCommand(helperPath: helperPath)
+        let expectedQuestion = questionCommand(helperPath: helperPath)
         var foundManaged = false
         var allCurrent = true
         for spec in eventSpecs {
@@ -290,8 +296,18 @@ public enum ClaudeHookConfiguration {
                 throw ClaudeHookConfigurationError.malformedEvent(spec.name)
             }
             let commands = observerCommands(in: groups)
-            foundManaged = foundManaged || commands.contains(where: { $0.contains(marker) })
+            foundManaged = foundManaged || commands.contains(where: isManagedCommand)
             if !commands.contains(expected) { allCurrent = false }
+        }
+
+        if let value = hooks["PreToolUse"] as? [[String: Any]] {
+            let commands = observerCommands(in: value)
+            foundManaged = foundManaged || commands.contains(where: isManagedCommand)
+            if !hasCurrentQuestionRegistration(in: value, expectedCommand: expectedQuestion) {
+                allCurrent = false
+            }
+        } else {
+            allCurrent = false
         }
 
         if allCurrent { return .current }
@@ -314,6 +330,7 @@ public enum ClaudeHookConfiguration {
         }
 
         let command = observerCommand(helperPath: helperPath)
+        let questionObserverCommand = questionCommand(helperPath: helperPath)
         var changed = false
         for spec in eventSpecs {
             var groups: [[String: Any]]
@@ -342,6 +359,36 @@ public enum ClaudeHookConfiguration {
             changed = true
         }
 
+
+        var preToolGroups: [[String: Any]]
+        if let value = hooks["PreToolUse"] {
+            guard let existing = value as? [[String: Any]] else {
+                throw ClaudeHookConfigurationError.malformedEvent("PreToolUse")
+            }
+            preToolGroups = existing
+        } else {
+            preToolGroups = []
+        }
+        if !hasCurrentQuestionRegistration(
+            in: preToolGroups,
+            expectedCommand: questionObserverCommand
+        ) {
+            preToolGroups = removingManagedCommands(
+                from: preToolGroups,
+                matching: questionMarker
+            )
+            preToolGroups.append([
+                "matcher": "AskUserQuestion",
+                "hooks": [[
+                    "type": "command",
+                    "command": questionObserverCommand,
+                    "timeout": 600,
+                ]],
+            ])
+            hooks["PreToolUse"] = preToolGroups
+            changed = true
+        }
+
         root["hooks"] = hooks
         let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
         return ClaudeHookConfigurationPlan(data: data + Data("\n".utf8), changed: changed)
@@ -359,12 +406,13 @@ public enum ClaudeHookConfiguration {
         var changed = false
         for (name, value) in hooks {
             guard let groups = value as? [[String: Any]] else { continue }
-            let cleaned = removingMarkedObservers(from: groups)
-            if observerCommands(in: cleaned) != observerCommands(in: groups) {
-                if cleaned.isEmpty {
+            let cleaned = removingManagedCommands(from: groups, matching: marker)
+            let fullyCleaned = removingManagedCommands(from: cleaned, matching: questionMarker)
+            if observerCommands(in: fullyCleaned) != observerCommands(in: groups) {
+                if fullyCleaned.isEmpty {
                     hooks.removeValue(forKey: name)
                 } else {
-                    hooks[name] = cleaned
+                    hooks[name] = fullyCleaned
                 }
                 changed = true
             }
@@ -397,6 +445,13 @@ public enum ClaudeHookConfiguration {
     }
 
     private static func removingMarkedObservers(from groups: [[String: Any]]) -> [[String: Any]] {
+        removingManagedCommands(from: groups, matching: marker)
+    }
+
+    private static func removingManagedCommands(
+        from groups: [[String: Any]],
+        matching marker: String
+    ) -> [[String: Any]] {
         groups.compactMap { group in
             guard let observers = group["hooks"] as? [[String: Any]] else { return group }
             let retained = observers.filter { observer in
@@ -408,6 +463,32 @@ public enum ClaudeHookConfiguration {
             copy["hooks"] = retained
             return copy
         }
+    }
+
+    private static func isManagedCommand(_ command: String) -> Bool {
+        command.contains(marker) || command.contains(questionMarker)
+    }
+
+    private static func hasCurrentQuestionRegistration(
+        in groups: [[String: Any]],
+        expectedCommand: String
+    ) -> Bool {
+        let registrations = groups.flatMap { group -> [(String?, [String: Any])] in
+            let matcher = group["matcher"] as? String
+            return (group["hooks"] as? [[String: Any]] ?? []).compactMap { hook in
+                guard let command = hook["command"] as? String,
+                      command.contains(questionMarker) else { return nil }
+                return (matcher, hook)
+            }
+        }
+        guard registrations.count == 1,
+              let registration = registrations.first else { return false }
+        let timeout = registration.1["timeout"] as? NSNumber
+        return registration.0 == "AskUserQuestion"
+            && registration.1["type"] as? String == "command"
+            && registration.1["command"] as? String == expectedCommand
+            && registration.1["async"] == nil
+            && timeout?.intValue == 600
     }
 
     private static func shellQuoted(_ value: String) -> String {
