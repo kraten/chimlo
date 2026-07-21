@@ -258,10 +258,11 @@ private struct SystemFeedbackCompactContent: View {
                     value: feedback.value,
                     reduceMotion: model.accessibility.reduceMotion
                 )
+                .padding(.trailing, 8)
                 .frame(
                     width: model.islandLayout.activityWingWidth,
                     height: model.islandLayout.compactHeight,
-                    alignment: .center
+                    alignment: .trailing
                 )
             }
         } else {
