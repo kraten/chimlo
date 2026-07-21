@@ -612,7 +612,7 @@ struct SessionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            trailingControls
+            trailingAccessory
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -647,6 +647,13 @@ struct SessionRow: View {
                         .lineLimit(1)
                         .layoutPriority(1)
 
+                    if onOpen != nil {
+                        PixelJumpMark(
+                            color: isHovering ? ChimloTheme.paper : ChimloTheme.mutedPaper
+                        )
+                        .fixedSize()
+                    }
+
                     Spacer(minLength: 6)
 
                     SessionMetadataBadge(
@@ -669,7 +676,7 @@ struct SessionRow: View {
                         )
                     }
                 }
-                .padding(.trailing, trailingControlInset)
+                .padding(.trailing, trailingAccessoryInset)
 
                 if let prompt = session.latestUserPrompt {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -720,46 +727,52 @@ struct SessionRow: View {
         .contentShape(Rectangle())
     }
 
-    @ViewBuilder
-    private var trailingControls: some View {
-        HStack(spacing: 0) {
-            if let onArchive {
-                Button(action: onArchive) {
-                    Image(systemName: "archivebox")
-                        .font(.system(size: 12, weight: .medium))
-                        .offset(x: 3)
-                        .frame(width: 20, height: 28)
-                }
-                .buttonStyle(SessionArchiveButtonStyle())
-                .help("Archive in Chimlo")
-                .accessibilityLabel("Archive \(session.displayTitle) in Chimlo")
-            }
+    private var trailingAccessory: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+            ZStack {
+                SessionTimeBadge(
+                    text: SessionRelativeTime.shortLabel(
+                        since: session.updatedAt,
+                        now: timeline.date
+                    ),
+                    accessibilityLabel: SessionRelativeTime.accessibilityLabel(
+                        since: session.updatedAt,
+                        now: timeline.date
+                    )
+                )
+                .opacity(onArchive != nil && isHovering ? 0 : 1)
+                .accessibilityHidden(onArchive != nil && isHovering)
 
-            if let onOpen {
-                Button(action: onOpen) {
-                    PixelJumpMark(color: ChimloTheme.mutedPaper)
-                        .frame(width: 20, height: 28)
+                if let onArchive {
+                    Button(action: onArchive) {
+                        Image(systemName: "archivebox")
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(width: 34, height: 28)
+                    }
+                    .buttonStyle(SessionArchiveButtonStyle())
+                    .help("Archive in Chimlo")
+                    .accessibilityLabel("Archive \(session.displayTitle) in Chimlo")
+                    .opacity(isHovering ? 1 : 0)
+                    .allowsHitTesting(isHovering)
+                    .accessibilityHidden(!isHovering)
                 }
-                .buttonStyle(.plain)
-                .help("Open source session")
-                .accessibilityLabel("Open \(session.displayTitle) in the source app")
             }
         }
-        .padding(.top, trailingControlsTopPadding)
+        .frame(width: 34, height: 28)
+        .padding(.top, trailingAccessoryTopPadding)
         .padding(.trailing, 6)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
-    private var trailingControlInset: CGFloat {
-        let controlCount = (onArchive == nil ? 0 : 1) + (onOpen == nil ? 0 : 1)
-        guard controlCount > 0 else { return 0 }
-        return CGFloat(controlCount * 20 - 4)
-    }
+    private let trailingAccessoryInset: CGFloat = 36
 
     private var neutralBadgeBackground: Color {
         isHovering ? ChimloTheme.hoveredBadgeInk : ChimloTheme.badgeInk
     }
 
-    private var trailingControlsTopPadding: CGFloat {
+    private var trailingAccessoryTopPadding: CGFloat {
         let hasConversationPreview = session.latestUserPrompt != nil
             || session.latestAgentResponse != nil
         return hasConversationPreview ? 3 : 9
@@ -1183,6 +1196,23 @@ private struct SessionMetadataBadge: View {
             .fixedSize(horizontal: true, vertical: false)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+private struct SessionTimeBadge: View {
+    let text: String
+    let accessibilityLabel: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(ChimloTheme.mutedPaper)
+            .lineLimit(1)
+            .monospacedDigit()
+            .frame(width: 34, height: 18)
+            .background(ChimloTheme.badgeInk)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 

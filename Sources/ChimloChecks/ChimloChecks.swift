@@ -42,6 +42,7 @@ private struct CheckSuite {
         hookPrivacyMapping()
         transcriptMetadataPrivacy()
         modelDisplayNames()
+        sessionRelativeTime()
         sessionVisibility()
         sessionArchiveVisibility()
         codexHookConfiguration()
@@ -116,6 +117,30 @@ private struct CheckSuite {
         expect(
             SystemFeedbackPolicy.adjustedValue(from: 0.5, direction: 1, fine: false) == 0.5625,
             "system feedback uses native-sized coarse steps"
+        )
+    }
+
+    mutating func sessionRelativeTime() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let label: (TimeInterval) -> String = { secondsAgo in
+            SessionRelativeTime.shortLabel(
+                since: now.addingTimeInterval(-secondsAgo),
+                now: now
+            )
+        }
+
+        expect(label(59) == "<1m", "fresh sessions show the first-minute badge")
+        expect(label(60) == "1m", "session age advances to whole minutes")
+        expect(label(3_600) == "1h", "session age advances to whole hours")
+        expect(label(86_400) == "1d", "session age advances to whole days")
+        expect(label(604_800) == "1w", "session age advances to whole weeks")
+        expect(label(-10) == "<1m", "future clock skew stays in the first-minute bucket")
+        expect(
+            SessionRelativeTime.accessibilityLabel(
+                since: now.addingTimeInterval(-2 * 3_600),
+                now: now
+            ) == "Session activity updated 2 hours ago",
+            "session age exposes a spoken accessibility label"
         )
     }
 

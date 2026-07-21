@@ -17,6 +17,7 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     var projectPath: String?
     var jumpURL: URL?
     var model: String?
+    var updatedAt: Date
     var latestUserPrompt: String?
     var latestAgentResponse: String?
     var latestResponseReceivedAt: Date?
@@ -1005,6 +1006,7 @@ final class ApplicationModel: ObservableObject {
                     agent: session.agent,
                     providerDisplayName: codexModelDisplayName(for: session)
                 ),
+                updatedAt: session.updatedAt,
                 latestUserPrompt: session.latestUserPrompt,
                 latestAgentResponse: session.latestAgentResponse,
                 latestResponseReceivedAt: latestResponseReceivedAt[session.id],
