@@ -234,6 +234,7 @@ final class ApplicationModel: ObservableObject {
     private let codexDesktopAdapter = CodexDesktopSessionAdapter()
     private var codexAppServerConnected = false
     private var sessionRemovalTasks: [String: Task<Void, Never>] = [:]
+    private var sessionActivityExpiryTask: Task<Void, Never>?
     private var sessionsArmedForCompletion: Set<String> = []
     private var latestResponseReceivedAt: [String: Date] = [:]
     private var completionDetailExpiryTasks: [String: Task<Void, Never>] = [:]
@@ -493,6 +494,8 @@ final class ApplicationModel: ObservableObject {
         protocolBridge = nil
         localSessionRuntime.stop()
         codexDesktopAdapter.stop()
+        sessionActivityExpiryTask?.cancel()
+        sessionActivityExpiryTask = nil
         for task in sessionRemovalTasks.values { task.cancel() }
         sessionRemovalTasks.removeAll()
         for task in completionDetailExpiryTasks.values { task.cancel() }
@@ -971,6 +974,7 @@ final class ApplicationModel: ObservableObject {
     }
 
     private func syncSessionProjections() {
+        let now = Date.now
         let projectedSessions: [SessionDisplayModel] = reducer.orderedSessions.compactMap { session in
             let isDemo = demoSessionIDs.contains(session.id)
             let hasActionableRequest = session.pendingRequest != nil
@@ -978,6 +982,10 @@ final class ApplicationModel: ObservableObject {
                 || sessionQuestions[session.id] != nil
             guard !hiddenSessionIDs.contains(session.id),
                   archivedSessionMarkers[session.id] == nil,
+                  SessionVisibilityPolicy.wasActiveRecently(
+                    updatedAt: session.updatedAt,
+                    now: now
+                  ),
                   SessionVisibilityPolicy.shouldDisplay(
                     title: session.title,
                     titleKind: session.titleKind,
@@ -1025,6 +1033,29 @@ final class ApplicationModel: ObservableObject {
             return left.offset < right.offset
         }.map { $0.element }
         resetSessionRevealIfNoOwnerInteraction()
+        scheduleSessionActivityExpiry(now: now)
+    }
+
+    private func scheduleSessionActivityExpiry(now: Date) {
+        sessionActivityExpiryTask?.cancel()
+        sessionActivityExpiryTask = nil
+        let nextExpiration = sessions
+            .map { $0.updatedAt.addingTimeInterval(SessionVisibilityPolicy.activityLifetime) }
+            .filter { $0 > now }
+            .min()
+        guard hasStarted, let nextExpiration else { return }
+
+        let delaySeconds = min(
+            SessionVisibilityPolicy.activityLifetime,
+            max(0.001, nextExpiration.timeIntervalSince(now))
+        )
+        let delayMilliseconds = max(1, Int(ceil(delaySeconds * 1_000)))
+        sessionActivityExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+            guard !Task.isCancelled, let self else { return }
+            sessionActivityExpiryTask = nil
+            syncSessionProjections()
+        }
     }
 
     private func resetSessionRevealIfNoOwnerInteraction() {

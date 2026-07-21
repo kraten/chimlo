@@ -1,6 +1,15 @@
 import Foundation
 
 public enum SessionVisibilityPolicy {
+    public static let activityLifetime: TimeInterval = 2 * 60 * 60
+
+    public static func wasActiveRecently(
+        updatedAt: Date,
+        now: Date = .now
+    ) -> Bool {
+        updatedAt > now.addingTimeInterval(-activityLifetime)
+    }
+
     public static func shouldDisplay(
         title: String,
         titleKind: SessionTitleKind,

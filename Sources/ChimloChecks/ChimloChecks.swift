@@ -156,12 +156,25 @@ private struct CheckSuite {
         expect(
             SessionDiscoveryRetentionPolicy.shouldRetain(
                 phase: .completed,
-                updatedAt: now.addingTimeInterval(-24 * 60),
+                updatedAt: now.addingTimeInterval(-119 * 60),
                 hasActiveProcess: false,
                 hasLastResponse: true,
                 now: now
             ),
-            "a completed session keeps its last response after twenty-four minutes"
+            "a response-backed session remains visible inside two hours"
+        )
+        expect(
+            !SessionVisibilityPolicy.wasActiveRecently(
+                updatedAt: now.addingTimeInterval(-2 * 60 * 60),
+                now: now
+            ) && !SessionDiscoveryRetentionPolicy.shouldRetain(
+                phase: .completed,
+                updatedAt: now.addingTimeInterval(-2 * 60 * 60),
+                hasActiveProcess: false,
+                hasLastResponse: true,
+                now: now
+            ),
+            "sessions expire at the two-hour activity boundary"
         )
         expect(
             !SessionDiscoveryRetentionPolicy.shouldRetain(
