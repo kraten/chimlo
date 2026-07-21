@@ -8,8 +8,9 @@ because one integration is unavailable:
 - incremental metadata-only reads of recent Codex and Claude JSONL records
 - documented Codex and Claude Code command hooks
 
-All reconciliation happens on this Mac. Chimlo does not use Keychain, upload
-session data, or replace either agent's native approval surface.
+All reconciliation happens on this Mac. Chimlo does not use Keychain or upload
+session data. Codex approvals remain in Codex. Claude Code questions and tool
+permissions can be answered in Chimlo, with Claude's native UI as the fallback.
 
 The packaged helper is:
 
@@ -25,9 +26,10 @@ session ID, provider, project basename, model label, hook kind, and safe tool
 category, and sends that small event to Chimlo's authenticated loopback
 listener. Prompt text, assistant text, transcript paths, tool inputs, tool
 outputs, environment values, and file contents are not retained. The one
-deliberate exception is Claude Code's `AskUserQuestion`: its question and
-choices live in memory only while Claude is blocked for an answer. They are
-never written to Chimlo's session cache or archive.
+deliberate exceptions are Claude Code's blocking owner interactions. An
+`AskUserQuestion` prompt and its choices, or a `PermissionRequest` tool name,
+path, and bounded action preview, live in memory only while Claude is waiting.
+They are never written to Chimlo's session cache or archive.
 
 The JSONL scanner follows the same boundary. It extracts only session ID,
 workspace path, model label, timestamp, and lifecycle record type. Reads are
@@ -61,7 +63,8 @@ asynchronous where Claude supports it. Chimlo also adds one narrow, synchronous
 Chimlo and returns the original question plus the selected answer through Claude
 Code's documented `updatedInput` contract. If Chimlo is closed, unreachable, or
 times out, the hook returns no decision and Claude Code shows its native
-question UI.
+question UI. A second narrow, synchronous hook handles `PermissionRequest` in
+the same way.
 
 ## Questions and permission behavior
 
@@ -70,11 +73,17 @@ single-select choice is sent immediately; multi-select questions require an
 explicit Send action. **Answer in Claude Code** releases the hook without an
 answer so the native prompt takes over.
 
-Tool permissions remain mirror-only. Chimlo shows that Codex or Claude Code is
-waiting, while the complete action and the authoritative Allow or Deny control
-remain in the provider's own terminal UI. A missing app, timeout, malformed
-payload, or transport error can never imply approval or fabricate an answer.
+Claude Code tool permissions show the real bounded action preview with **Deny**,
+**Allow Once**, and **Allow All**. Allow All always stays in memory for the
+current session. Chimlo prefers Claude's own suggestion, narrows its destination
+to `session`, and uses Claude's `acceptEdits` session mode for file changes when
+no compatible suggestion exists. Persistent settings changes and
+`bypassPermissions` are never surfaced or returned. Codex tool permissions
+remain mirror-only.
+
+A missing app, timeout, malformed payload, or transport error can never imply
+approval or fabricate an answer.
 
 The helper reserves stdout for the provider's hook response. It emits `{}` for
-observation and for any unanswered question fallback, and exits successfully
-even when Chimlo is unavailable.
+observation and for any unanswered question or permission fallback, and exits
+successfully even when Chimlo is unavailable.

@@ -91,6 +91,8 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
     case event(AgentEvent)
     case decisionRequest(ChimloDecisionRequest)
     case decisionResponse(ChimloDecisionResponse)
+    case permissionRequest(ProviderPermissionRequest)
+    case permissionResponse(ProviderPermissionResponse)
     case questionRequest(ProviderQuestionRequest)
     case questionResponse(ProviderQuestionResponse)
     case acknowledgement(ChimloAcknowledgement)
@@ -106,6 +108,8 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
         case event
         case decisionRequest = "decision_request"
         case decisionResponse = "decision_response"
+        case permissionRequest = "permission_request"
+        case permissionResponse = "permission_response"
         case questionRequest = "question_request"
         case questionResponse = "question_response"
         case acknowledgement
@@ -123,6 +127,10 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
             self = .decisionRequest(try container.decode(ChimloDecisionRequest.self, forKey: .payload))
         case .decisionResponse:
             self = .decisionResponse(try container.decode(ChimloDecisionResponse.self, forKey: .payload))
+        case .permissionRequest:
+            self = .permissionRequest(try container.decode(ProviderPermissionRequest.self, forKey: .payload))
+        case .permissionResponse:
+            self = .permissionResponse(try container.decode(ProviderPermissionResponse.self, forKey: .payload))
         case .questionRequest:
             self = .questionRequest(try container.decode(ProviderQuestionRequest.self, forKey: .payload))
         case .questionResponse:
@@ -147,6 +155,12 @@ public enum ChimloWireMessage: Codable, Equatable, Sendable {
             try container.encode(request, forKey: .payload)
         case let .decisionResponse(response):
             try container.encode(MessageType.decisionResponse, forKey: .type)
+            try container.encode(response, forKey: .payload)
+        case let .permissionRequest(request):
+            try container.encode(MessageType.permissionRequest, forKey: .type)
+            try container.encode(request, forKey: .payload)
+        case let .permissionResponse(response):
+            try container.encode(MessageType.permissionResponse, forKey: .type)
             try container.encode(response, forKey: .payload)
         case let .questionRequest(request):
             try container.encode(MessageType.questionRequest, forKey: .type)

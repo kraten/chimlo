@@ -75,6 +75,8 @@ struct ClaudeHookConfigurationTests {
         #expect(text.contains("leave-this-alone"))
         #expect(text.contains(ClaudeHookConfiguration.questionMarker))
         #expect(text.contains("AskUserQuestion"))
+        #expect(text.contains(ClaudeHookConfiguration.permissionMarker))
+        #expect(text.contains("hook claude permission"))
         #expect(text.contains("\"timeout\" : 600"))
     }
 
@@ -90,6 +92,7 @@ struct ClaudeHookConfigurationTests {
         #expect(try ClaudeHookConfiguration.installationState(in: removed.data, helperPath: helperPath) == .missing)
         #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.marker))
         #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.questionMarker))
+        #expect(!String(decoding: removed.data, as: UTF8.self).contains(ClaudeHookConfiguration.permissionMarker))
     }
 
     @Test("A non-blocking or broad question hook requires repair")
@@ -127,5 +130,70 @@ struct ClaudeHookConfigurationTests {
             in: repaired.data,
             helperPath: helperPath
         ) == .current)
+    }
+
+    @Test("A non-blocking Claude permission hook requires repair")
+    func unsafePermissionRegistrationNeedsRepair() throws {
+        let installed = try ClaudeHookConfiguration.merging(
+            existingData: nil,
+            helperPath: helperPath
+        )
+        var root = try #require(JSONSerialization.jsonObject(with: installed.data) as? [String: Any])
+        var hooks = try #require(root["hooks"] as? [String: Any])
+        var groups = try #require(hooks["PermissionRequest"] as? [[String: Any]])
+        let index = try #require(groups.firstIndex { group in
+            let commands = (group["hooks"] as? [[String: Any]] ?? [])
+                .compactMap { $0["command"] as? String }
+            return commands.contains(where: { $0.contains(ClaudeHookConfiguration.permissionMarker) })
+        })
+        var handlers = try #require(groups[index]["hooks"] as? [[String: Any]])
+        handlers[0]["async"] = true
+        groups[index]["hooks"] = handlers
+        hooks["PermissionRequest"] = groups
+        root["hooks"] = hooks
+        let unsafe = try JSONSerialization.data(withJSONObject: root)
+
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: unsafe,
+            helperPath: helperPath
+        ) == .needsRepair)
+        let repaired = try ClaudeHookConfiguration.merging(
+            existingData: unsafe,
+            helperPath: helperPath
+        )
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: repaired.data,
+            helperPath: helperPath
+        ) == .current)
+    }
+
+    @Test("Repair replaces the legacy asynchronous permission observer")
+    func legacyPermissionObserverIsReplaced() throws {
+        let legacyCommand = ClaudeHookConfiguration.observerCommand(helperPath: helperPath)
+        let legacy = Data(
+            #"{"hooks":{"PermissionRequest":[{"matcher":"*","hooks":[{"type":"command","command":"\#(legacyCommand)","async":true,"timeout":2}]}]}}"#.utf8
+        )
+
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: legacy,
+            helperPath: helperPath
+        ) == .needsRepair)
+        let repaired = try ClaudeHookConfiguration.merging(
+            existingData: legacy,
+            helperPath: helperPath
+        )
+        let root = try #require(JSONSerialization.jsonObject(with: repaired.data) as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        let groups = try #require(hooks["PermissionRequest"] as? [[String: Any]])
+        let commands = groups.flatMap { group in
+            (group["hooks"] as? [[String: Any]] ?? []).compactMap { $0["command"] as? String }
+        }
+
+        #expect(try ClaudeHookConfiguration.installationState(
+            in: repaired.data,
+            helperPath: helperPath
+        ) == .current)
+        #expect(commands.contains(where: { $0.contains(ClaudeHookConfiguration.permissionMarker) }))
+        #expect(!commands.contains(where: { $0.contains(ClaudeHookConfiguration.marker) }))
     }
 }

@@ -100,6 +100,10 @@ public enum PrivacySafeHookMapper {
             guard toolName != "AskUserQuestion" else { return nil }
             return Mapping(kind: .activity, detail: "Working")
         case "PermissionRequest":
+            // Claude permissions have a separate blocking bridge. Keeping the
+            // old asynchronous observer would race the explicit response and
+            // could restore a permission card after it was resolved.
+            guard source != .claude else { return nil }
             return permissionMapping(toolName: toolName, source: source)
         case "PermissionDenied":
             return Mapping(kind: .activity, detail: "Approval handled in \(source.displayName)")
@@ -112,6 +116,7 @@ public enum PrivacySafeHookMapper {
         case "Notification":
             switch notification {
             case "permission_prompt":
+                guard source != .claude else { return nil }
                 return permissionMapping(toolName: toolName, source: source)
             case "agent_needs_input", "idle_prompt":
                 return Mapping(

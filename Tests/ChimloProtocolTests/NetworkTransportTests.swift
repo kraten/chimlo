@@ -53,6 +53,64 @@ struct NetworkTransportTests {
         #expect(!response.outcome.isApproved)
     }
 
+    @Test("Claude permission choices round-trip through the loopback server")
+    func providerPermissionRoundTrip() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chimlo-network-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RuntimeDescriptorStore(descriptorURL: directory.appendingPathComponent("runtime.json"))
+        let server = try ChimloServer(
+            descriptorStore: store,
+            eventHandler: { _ in },
+            permissionHandler: { request in
+                ProviderPermissionResponse(
+                    requestID: request.id,
+                    outcome: .allowedForSession
+                )
+            }
+        )
+        defer { server.stop() }
+        _ = try await server.start()
+        let client = try ChimloClient(descriptorStore: store, timeout: .seconds(1))
+        let request = ProviderPermissionRequest(
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            toolName: "Write",
+            prompt: "Write hello.txt?",
+            allowsSessionApproval: true
+        )
+
+        let response = await client.requestPermission(request)
+
+        #expect(response.outcome == .allowedForSession)
+        #expect(response.outcome.grantsPermission)
+    }
+
+    @Test("A server without a permission handler never grants access")
+    func serverDefaultsPermissionsToUnavailable() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chimlo-network-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RuntimeDescriptorStore(descriptorURL: directory.appendingPathComponent("runtime.json"))
+        let server = try ChimloServer(descriptorStore: store, eventHandler: { _ in })
+        defer { server.stop() }
+        _ = try await server.start()
+        let client = try ChimloClient(descriptorStore: store, timeout: .seconds(1))
+        let request = ProviderPermissionRequest(
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            toolName: "Bash",
+            prompt: "Run this command?"
+        )
+
+        let response = await client.requestPermission(request)
+
+        #expect(response.outcome == .unavailable)
+        #expect(!response.outcome.grantsPermission)
+    }
+
     @Test("Question selections round-trip through the loopback server")
     func questionSelectionsRoundTrip() async throws {
         let directory = FileManager.default.temporaryDirectory

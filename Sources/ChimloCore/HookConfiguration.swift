@@ -243,6 +243,7 @@ public struct ClaudeHookConfigurationPlan: Equatable, Sendable {
 public enum ClaudeHookConfiguration {
     public static let marker = "# chimlo-claude-observer"
     public static let questionMarker = "# chimlo-claude-question"
+    public static let permissionMarker = "# chimlo-claude-permission"
 
     private struct EventSpec {
         let name: String
@@ -255,7 +256,6 @@ public enum ClaudeHookConfiguration {
         EventSpec(name: "UserPromptSubmit", matcher: nil, asynchronous: true),
         EventSpec(name: "PreToolUse", matcher: "*", asynchronous: true),
         EventSpec(name: "PostToolUse", matcher: "*", asynchronous: true),
-        EventSpec(name: "PermissionRequest", matcher: "*", asynchronous: true),
         EventSpec(name: "Notification", matcher: "permission_prompt|agent_needs_input|agent_completed|idle_prompt", asynchronous: true),
         EventSpec(name: "Stop", matcher: nil, asynchronous: true),
         EventSpec(name: "StopFailure", matcher: nil, asynchronous: true),
@@ -272,6 +272,10 @@ public enum ClaudeHookConfiguration {
         "\(shellQuoted(helperPath)) hook claude question \(questionMarker)"
     }
 
+    public static func permissionCommand(helperPath: String) -> String {
+        "\(shellQuoted(helperPath)) hook claude permission \(permissionMarker)"
+    }
+
     public static func installationState(
         in data: Data?,
         helperPath: String
@@ -285,6 +289,7 @@ public enum ClaudeHookConfiguration {
 
         let expected = observerCommand(helperPath: helperPath)
         let expectedQuestion = questionCommand(helperPath: helperPath)
+        let expectedPermission = permissionCommand(helperPath: helperPath)
         var foundManaged = false
         var allCurrent = true
         for spec in eventSpecs {
@@ -304,6 +309,20 @@ public enum ClaudeHookConfiguration {
             let commands = observerCommands(in: value)
             foundManaged = foundManaged || commands.contains(where: isManagedCommand)
             if !hasCurrentQuestionRegistration(in: value, expectedCommand: expectedQuestion) {
+                allCurrent = false
+            }
+        } else {
+            allCurrent = false
+        }
+
+        if let value = hooks["PermissionRequest"] as? [[String: Any]] {
+            let commands = observerCommands(in: value)
+            foundManaged = foundManaged || commands.contains(where: isManagedCommand)
+            if commands.contains(where: { $0.contains(marker) })
+                || !hasCurrentPermissionRegistration(
+                    in: value,
+                    expectedCommand: expectedPermission
+                ) {
                 allCurrent = false
             }
         } else {
@@ -331,6 +350,7 @@ public enum ClaudeHookConfiguration {
 
         let command = observerCommand(helperPath: helperPath)
         let questionObserverCommand = questionCommand(helperPath: helperPath)
+        let permissionObserverCommand = permissionCommand(helperPath: helperPath)
         var changed = false
         for spec in eventSpecs {
             var groups: [[String: Any]]
@@ -389,6 +409,47 @@ public enum ClaudeHookConfiguration {
             changed = true
         }
 
+        var permissionGroups: [[String: Any]]
+        if let value = hooks["PermissionRequest"] {
+            guard let existing = value as? [[String: Any]] else {
+                throw ClaudeHookConfigurationError.malformedEvent("PermissionRequest")
+            }
+            permissionGroups = existing
+        } else {
+            permissionGroups = []
+        }
+
+        // Older Chimlo builds observed PermissionRequest asynchronously. The
+        // blocking bridge owns this event now, so remove only that marked
+        // observer before installing the exact replacement.
+        let withoutLegacyObserver = removingManagedCommands(
+            from: permissionGroups,
+            matching: marker
+        )
+        if observerCommands(in: withoutLegacyObserver) != observerCommands(in: permissionGroups) {
+            permissionGroups = withoutLegacyObserver
+            changed = true
+        }
+        if !hasCurrentPermissionRegistration(
+            in: permissionGroups,
+            expectedCommand: permissionObserverCommand
+        ) {
+            permissionGroups = removingManagedCommands(
+                from: permissionGroups,
+                matching: permissionMarker
+            )
+            permissionGroups.append([
+                "matcher": "*",
+                "hooks": [[
+                    "type": "command",
+                    "command": permissionObserverCommand,
+                    "timeout": 600,
+                ]],
+            ])
+            changed = true
+        }
+        hooks["PermissionRequest"] = permissionGroups
+
         root["hooks"] = hooks
         let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
         return ClaudeHookConfigurationPlan(data: data + Data("\n".utf8), changed: changed)
@@ -408,11 +469,12 @@ public enum ClaudeHookConfiguration {
             guard let groups = value as? [[String: Any]] else { continue }
             let cleaned = removingManagedCommands(from: groups, matching: marker)
             let fullyCleaned = removingManagedCommands(from: cleaned, matching: questionMarker)
-            if observerCommands(in: fullyCleaned) != observerCommands(in: groups) {
-                if fullyCleaned.isEmpty {
+            let allCleaned = removingManagedCommands(from: fullyCleaned, matching: permissionMarker)
+            if observerCommands(in: allCleaned) != observerCommands(in: groups) {
+                if allCleaned.isEmpty {
                     hooks.removeValue(forKey: name)
                 } else {
-                    hooks[name] = fullyCleaned
+                    hooks[name] = allCleaned
                 }
                 changed = true
             }
@@ -466,7 +528,9 @@ public enum ClaudeHookConfiguration {
     }
 
     private static func isManagedCommand(_ command: String) -> Bool {
-        command.contains(marker) || command.contains(questionMarker)
+        command.contains(marker)
+            || command.contains(questionMarker)
+            || command.contains(permissionMarker)
     }
 
     private static func hasCurrentQuestionRegistration(
@@ -485,6 +549,28 @@ public enum ClaudeHookConfiguration {
               let registration = registrations.first else { return false }
         let timeout = registration.1["timeout"] as? NSNumber
         return registration.0 == "AskUserQuestion"
+            && registration.1["type"] as? String == "command"
+            && registration.1["command"] as? String == expectedCommand
+            && registration.1["async"] == nil
+            && timeout?.intValue == 600
+    }
+
+    private static func hasCurrentPermissionRegistration(
+        in groups: [[String: Any]],
+        expectedCommand: String
+    ) -> Bool {
+        let registrations = groups.flatMap { group -> [(String?, [String: Any])] in
+            let matcher = group["matcher"] as? String
+            return (group["hooks"] as? [[String: Any]] ?? []).compactMap { hook in
+                guard let command = hook["command"] as? String,
+                      command.contains(permissionMarker) else { return nil }
+                return (matcher, hook)
+            }
+        }
+        guard registrations.count == 1,
+              let registration = registrations.first else { return false }
+        let timeout = registration.1["timeout"] as? NSNumber
+        return registration.0 == "*"
             && registration.1["type"] as? String == "command"
             && registration.1["command"] as? String == expectedCommand
             && registration.1["async"] == nil

@@ -66,6 +66,33 @@ struct WireProtocolTests {
         #expect(!ChimloDecisionOutcome.denied.isApproved)
         #expect(!ChimloDecisionOutcome.cancelled.isApproved)
         #expect(!ChimloDecisionOutcome.unavailable.isApproved)
+        #expect(ProviderPermissionOutcome.allowedOnce.grantsPermission)
+        #expect(ProviderPermissionOutcome.allowedForSession.grantsPermission)
+        #expect(!ProviderPermissionOutcome.denied.grantsPermission)
+        #expect(!ProviderPermissionOutcome.cancelled.grantsPermission)
+        #expect(!ProviderPermissionOutcome.unavailable.grantsPermission)
+    }
+
+    @Test("Provider permission requests round-trip with transient context")
+    func providerPermissionRoundTrip() throws {
+        let request = ProviderPermissionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000008")!,
+            sessionID: "claude-1",
+            agent: .claude,
+            title: "chimlo",
+            toolName: "Write",
+            prompt: "Do you want Claude to write hello.txt?",
+            detail: "/tmp/hello.txt",
+            preview: "hello",
+            allowsSessionApproval: true
+        )
+        let envelope = ChimloEnvelope(
+            sentAt: Date(timeIntervalSince1970: 1_700_000_050),
+            authenticationToken: String(repeating: "c", count: 64),
+            message: .permissionRequest(request)
+        )
+
+        #expect(try ChimloFrameCodec.decode(ChimloFrameCodec.encode(envelope)) == envelope)
     }
 
     @Test("Question requests round-trip with their options")

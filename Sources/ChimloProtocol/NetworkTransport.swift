@@ -5,11 +5,13 @@ import Network
 public final class ChimloServer: @unchecked Sendable {
     public typealias EventHandler = @Sendable (AgentEvent) async -> Void
     public typealias DecisionHandler = @Sendable (ChimloDecisionRequest) async -> ChimloDecisionResponse
+    public typealias PermissionHandler = @Sendable (ProviderPermissionRequest) async -> ProviderPermissionResponse
     public typealias QuestionHandler = @Sendable (ProviderQuestionRequest) async -> ProviderQuestionResponse
 
     private let descriptorStore: RuntimeDescriptorStore
     private let eventHandler: EventHandler
     private let decisionHandler: DecisionHandler
+    private let permissionHandler: PermissionHandler
     private let questionHandler: QuestionHandler
     private let authenticationToken: String
     private let queue = DispatchQueue(label: "dev.chimlo.protocol.server", qos: .userInitiated)
@@ -23,6 +25,9 @@ public final class ChimloServer: @unchecked Sendable {
         decisionHandler: @escaping DecisionHandler = { request in
             .unavailable(for: request.id, reason: "No decision handler is configured")
         },
+        permissionHandler: @escaping PermissionHandler = { request in
+            .unavailable(for: request.id, reason: "No permission handler is configured")
+        },
         questionHandler: @escaping QuestionHandler = { request in
             .unavailable(for: request.id, reason: "No question handler is configured")
         }
@@ -30,6 +35,7 @@ public final class ChimloServer: @unchecked Sendable {
         self.descriptorStore = try descriptorStore ?? .live()
         self.eventHandler = eventHandler
         self.decisionHandler = decisionHandler
+        self.permissionHandler = permissionHandler
         self.questionHandler = questionHandler
         self.authenticationToken = try SecureAuthenticationToken.generate()
     }
@@ -164,6 +170,17 @@ public final class ChimloServer: @unchecked Sendable {
                 )
             }
             return .decisionResponse(response)
+        case let .permissionRequest(request):
+            if let expiresAt = request.expiresAt, expiresAt <= Date() {
+                return .permissionResponse(.unavailable(for: request.id, reason: "Permission request expired"))
+            }
+            let response = await permissionHandler(request)
+            guard response.requestID == request.id else {
+                return .permissionResponse(
+                    .unavailable(for: request.id, reason: "Permission handler returned a mismatched request identifier")
+                )
+            }
+            return .permissionResponse(response)
         case let .questionRequest(request):
             if let expiresAt = request.expiresAt, expiresAt <= Date() {
                 return .questionResponse(.unavailable(for: request.id, reason: "Question request expired"))
@@ -177,7 +194,7 @@ public final class ChimloServer: @unchecked Sendable {
             return .questionResponse(response)
         case .ping:
             return .acknowledgement(.init(acknowledgedMessageID: envelope.messageID))
-        case .decisionResponse, .questionResponse, .acknowledgement, .error:
+        case .decisionResponse, .permissionResponse, .questionResponse, .acknowledgement, .error:
             return .error(.init(code: .invalidRequest, message: "Message type is not accepted by the server"))
         }
     }
@@ -225,6 +242,22 @@ public struct ChimloClient: Sendable {
             guard case let .decisionResponse(response) = message,
                   response.requestID == request.id else {
                 return .unavailable(for: request.id, reason: "Chimlo returned an invalid decision response")
+            }
+            return response
+        } catch {
+            return .unavailable(for: request.id, reason: error.localizedDescription)
+        }
+    }
+
+    /// Provider permissions require an explicit owner choice. Communication
+    /// failures always return unavailable so the provider can use its native
+    /// permission UI; they never grant a tool call.
+    public func requestPermission(_ request: ProviderPermissionRequest) async -> ProviderPermissionResponse {
+        do {
+            let message = try await exchange(.permissionRequest(request), messageID: UUID())
+            guard case let .permissionResponse(response) = message,
+                  response.requestID == request.id else {
+                return .unavailable(for: request.id, reason: "Chimlo returned an invalid permission response")
             }
             return response
         } catch {

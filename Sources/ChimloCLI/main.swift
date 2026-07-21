@@ -63,11 +63,19 @@ enum ChimloCommand {
             print("{}")
             return
         }
-        if source == .claude, arguments[1] == "question" {
-            await answerClaudeQuestionHook()
-        } else {
-            await observeProviderHook(arguments, source: source)
+        if source == .claude {
+            switch arguments[1] {
+            case "question":
+                await answerClaudeQuestionHook()
+                return
+            case "permission":
+                await answerClaudePermissionHook()
+                return
+            default:
+                break
+            }
         }
+        await observeProviderHook(arguments, source: source)
     }
 
     /// Observation hooks never block or break the invoking coding agent. `{}`
@@ -109,6 +117,26 @@ enum ChimloCommand {
         }
 
         let response = await client.requestQuestion(hook.request)
+        FileHandle.standardOutput.write(hook.output(for: response))
+    }
+
+    /// PermissionRequest is blocked only long enough for an explicit choice.
+    /// Every unavailable or cancelled response prints `{}`, returning control
+    /// to Claude Code's native permission prompt without granting anything.
+    private static func answerClaudePermissionHook() async {
+        guard let data = try? FileHandle.standardInput.read(
+            upToCount: ClaudePermissionHook.maximumPayloadBytes + 1
+        ), data.count <= ClaudePermissionHook.maximumPayloadBytes,
+              let hook = try? ClaudePermissionHook(
+                  data: data,
+                  expiresAt: Date().addingTimeInterval(590)
+              ),
+              let client = try? ChimloClient(timeout: .seconds(595)) else {
+            FileHandle.standardOutput.write(ClaudePermissionHook.fallbackOutput)
+            return
+        }
+
+        let response = await client.requestPermission(hook.request)
         FileHandle.standardOutput.write(hook.output(for: response))
     }
 
@@ -313,6 +341,7 @@ enum ChimloCommand {
       chimlo decision --title TEXT --message TEXT [options]
       chimlo hook codex|claude observe < hook.json
       chimlo hook claude question < hook.json
+      chimlo hook claude permission < hook.json
       chimlo descriptor
 
     Common emit options:

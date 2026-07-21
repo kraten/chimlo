@@ -67,9 +67,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude observe # chimlo-claude-observer",
-            "async": true,
-            "timeout": 2
+            "command": "'/Users/YOU/Library/Application Support/Chimlo/bin/chimlo' hook claude permission # chimlo-claude-permission",
+            "timeout": 600
           }
         ]
       }

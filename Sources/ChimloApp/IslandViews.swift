@@ -394,13 +394,19 @@ private struct CompactIslandView: View {
     }
 
     private var compactCount: String {
-        if model.pendingDecision != nil { return "!" }
+        if model.pendingDecision != nil || model.sessions.contains(where: { $0.mood == .waiting }) {
+            return "!"
+        }
+        if model.sessions.contains(where: { $0.mood == .question }) { return "?" }
         guard !model.sessions.isEmpty else { return "" }
         return "\(min(model.sessions.count, 9))"
     }
 
     private var compactCountColor: Color {
         if model.pendingDecision != nil { return ChimloTheme.paper }
+        if model.sessions.contains(where: { $0.mood == .waiting || $0.mood == .question }) {
+            return ChimloTheme.attention
+        }
         if model.sessions.contains(where: { $0.mood == .failed }) { return ChimloTheme.clayText }
         if model.sessions.contains(where: { $0.mood == .working }) { return ChimloTheme.liveGreen }
         return ChimloTheme.quietPaper
@@ -442,6 +448,12 @@ private struct SessionListView: View {
                                 onArchive: session.needsAttention || session.isDemo
                                     ? nil
                                     : { model.archiveSession(session) },
+                                onPermissionDecision: { outcome in
+                                    model.respondToSessionPermission(
+                                        sessionID: session.id,
+                                        outcome: outcome
+                                    )
+                                },
                                 onQuestionOption: { label in
                                     model.selectQuestionOption(sessionID: session.id, label: label)
                                 },
@@ -523,6 +535,7 @@ struct SessionRow: View {
     let increasedContrast: Bool
     var onOpen: (() -> Void)? = nil
     var onArchive: (() -> Void)? = nil
+    var onPermissionDecision: ((ProviderPermissionOutcome) -> Void)? = nil
     var onQuestionOption: ((String) -> Void)? = nil
     var onSubmitQuestion: (() -> Void)? = nil
     var onAnswerInClaude: (() -> Void)? = nil
@@ -531,6 +544,13 @@ struct SessionRow: View {
     var body: some View {
         VStack(spacing: 8) {
             summaryCard
+
+            if let permission = session.permission {
+                SessionPermissionView(
+                    presentation: permission,
+                    decide: { onPermissionDecision?($0) }
+                )
+            }
 
             if let question = session.question {
                 SessionQuestionView(
@@ -797,6 +817,137 @@ struct SessionRow: View {
     }
 }
 
+private struct SessionPermissionView: View {
+    let presentation: SessionPermissionPresentation
+    let decide: (ProviderPermissionOutcome) -> Void
+
+    private var request: ProviderPermissionRequest { presentation.request }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .center, spacing: 7) {
+                PixelSystemGlyph(
+                    kind: .warning,
+                    color: ChimloTheme.providerOrange,
+                    size: 15
+                )
+
+                Text(request.toolName)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(ChimloTheme.providerOrange)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                Text("Claude permission")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(ChimloTheme.mutedPaper)
+            }
+
+            Text(request.prompt)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ChimloTheme.paper)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let detail = request.detail {
+                Text(detail)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(ChimloTheme.quietPaper)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let preview = request.preview {
+                Text(preview)
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ChimloTheme.quietPaper)
+                    .lineSpacing(2)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background(ChimloTheme.raisedInk)
+                    .clipShape(SteppedPanelShape())
+            }
+
+            HStack(spacing: 6) {
+                Button("Deny") {
+                    decide(.denied)
+                }
+                .buttonStyle(PermissionActionButtonStyle(kind: .deny))
+                .keyboardShortcut(.cancelAction)
+                .accessibilityHint("Deny this Claude Code tool request")
+
+                Button("Allow Once") {
+                    decide(.allowedOnce)
+                }
+                .buttonStyle(PermissionActionButtonStyle(kind: .once))
+                .keyboardShortcut(.defaultAction)
+                .accessibilityHint("Allow only this Claude Code tool request")
+
+                Button("Allow All") {
+                    decide(.allowedForSession)
+                }
+                .buttonStyle(PermissionActionButtonStyle(kind: .session))
+                .accessibilityHint("Allow Claude's matching requests for this session only")
+            }
+        }
+        // The stepped cut removes six points at the top-left. Twelve points of
+        // leading padding keeps the icon, type, and buttons fully clear of it.
+        .padding(.top, 10)
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .padding(.bottom, 9)
+        .background(ChimloTheme.attentionInk)
+        .clipShape(SteppedPanelShape())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            "Claude Code permission for \(request.toolName). \(request.prompt)"
+        )
+    }
+}
+
+private struct PermissionActionButtonStyle: ButtonStyle {
+    enum Kind {
+        case deny
+        case once
+        case session
+    }
+
+    let kind: Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 10.5, weight: .bold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 31)
+            .background(background(isPressed: configuration.isPressed))
+            .clipShape(SteppedPanelShape())
+            .contentShape(Rectangle())
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .deny: ChimloTheme.clayText
+        case .once, .session: ChimloTheme.ink
+        }
+    }
+
+    private func background(isPressed: Bool) -> Color {
+        switch kind {
+        case .deny:
+            isPressed ? ChimloTheme.clay.opacity(0.42) : ChimloTheme.clay.opacity(0.24)
+        case .once:
+            isPressed ? ChimloTheme.quietPaper : ChimloTheme.paper
+        case .session:
+            isPressed ? ChimloTheme.attention : ChimloTheme.providerOrange
+        }
+    }
+}
+
 private struct SessionQuestionView: View {
     let presentation: SessionQuestionPresentation
     let select: (String) -> Void
@@ -872,7 +1023,7 @@ private struct SessionQuestionView: View {
 
             HStack(spacing: 10) {
                 Button("Answer in Claude Code", action: answerInClaude)
-                    .buttonStyle(QuestionFallbackButtonStyle())
+                    .buttonStyle(ProviderFallbackButtonStyle())
 
                 Spacer(minLength: 8)
 
@@ -922,7 +1073,7 @@ private struct QuestionOptionButtonStyle: ButtonStyle {
     }
 }
 
-private struct QuestionFallbackButtonStyle: ButtonStyle {
+private struct ProviderFallbackButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 10, weight: .medium))

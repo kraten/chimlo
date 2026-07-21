@@ -371,6 +371,7 @@ enum PixelSystemGlyphKind: Equatable {
     case speaker
     case mutedSpeaker
     case sun
+    case warning
 }
 
 /// Chimlo-owned 7x7 system glyphs. These share the avatar's square-pixel
@@ -416,6 +417,8 @@ struct PixelSystemGlyph: View {
             "0010001/0110010/1110100/1110000/1110100/0110010/0010001"
         case .sun:
             "0010100/1001001/0111110/0011100/0111110/1001001/0010100"
+        case .warning:
+            "0001000/0010100/0011100/0101010/0100010/1001001/1111111"
         }
         return encoded.split(separator: "/").map(Array.init)
     }

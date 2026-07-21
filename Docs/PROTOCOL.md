@@ -90,6 +90,25 @@ shutdown, authentication failure, or transport error returns `{}` so Claude
 Code presents its native question instead. Question payloads and answers never
 enter Chimlo's persisted session registry.
 
+## Claude Code permissions
+
+`permission_request` carries one bounded, transient `PermissionRequest`
+presentation: the originating session, tool category, human-readable prompt,
+optional path or description, optional action preview, and whether Claude
+can receive a session-scoped allow update. A correlated
+`permission_response` is one of allow once, allow for session, deny, cancel, or
+unavailable.
+
+The blocking helper returns Claude's documented `PermissionRequest` decision
+object only after an explicit choice. Allow once returns `behavior: allow` with
+no permission update. Allow All prefers a validated Claude-authored rule,
+narrows it to `destination: session`, and falls back to `acceptEdits` for file
+changes or a bounded matching tool rule for other permissions. Deny returns
+`behavior: deny`. Bypass mode and persistent destinations are discarded.
+Cancellation, timeout, shutdown, authentication failure, or transport error
+returns `{}` so Claude Code presents its native permission UI. Tool input and
+the action preview never enter Chimlo's persisted session registry.
+
 ## Payload limits
 
 The implementation bounds frames before allocation. Adapters should further cap

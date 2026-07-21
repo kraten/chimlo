@@ -161,6 +161,81 @@ public struct ProviderQuestionResponse: Codable, Equatable, Sendable {
     }
 }
 
+/// A provider-authored tool permission shown only while the provider is
+/// blocked. The action preview is transient and is never added to Chimlo's
+/// archived session model.
+public struct ProviderPermissionRequest: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let sessionID: String
+    public let agent: AgentKind
+    public let title: String
+    public let toolName: String
+    public let prompt: String
+    public let detail: String?
+    public let preview: String?
+    public let allowsSessionApproval: Bool
+    public let expiresAt: Date?
+
+    public init(
+        id: UUID = UUID(),
+        sessionID: String,
+        agent: AgentKind,
+        title: String,
+        toolName: String,
+        prompt: String,
+        detail: String? = nil,
+        preview: String? = nil,
+        allowsSessionApproval: Bool = false,
+        expiresAt: Date? = nil
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.agent = agent
+        self.title = title
+        self.toolName = toolName
+        self.prompt = prompt
+        self.detail = detail
+        self.preview = preview
+        self.allowsSessionApproval = allowsSessionApproval
+        self.expiresAt = expiresAt
+    }
+}
+
+public enum ProviderPermissionOutcome: String, Codable, Equatable, Sendable {
+    case allowedOnce
+    case allowedForSession
+    case denied
+    case cancelled
+    case unavailable
+
+    public var grantsPermission: Bool {
+        self == .allowedOnce || self == .allowedForSession
+    }
+}
+
+public struct ProviderPermissionResponse: Codable, Equatable, Sendable {
+    public let requestID: UUID
+    public let outcome: ProviderPermissionOutcome
+    public let note: String?
+    public let resolvedAt: Date
+
+    public init(
+        requestID: UUID,
+        outcome: ProviderPermissionOutcome,
+        note: String? = nil,
+        resolvedAt: Date = Date()
+    ) {
+        self.requestID = requestID
+        self.outcome = outcome
+        self.note = note
+        self.resolvedAt = resolvedAt
+    }
+
+    public static func unavailable(for requestID: UUID, reason: String? = nil) -> Self {
+        Self(requestID: requestID, outcome: .unavailable, note: reason)
+    }
+}
+
 public enum PendingRequest: Codable, Equatable, Sendable {
     case approval(ApprovalRequest)
     case question(AgentQuestion)

@@ -357,6 +357,12 @@ private struct CheckSuite {
                     && mergedText.contains("AskUserQuestion"),
                 "Claude question bridge is installed as a blocking AskUserQuestion hook"
             )
+            expect(
+                mergedText.contains(ClaudeHookConfiguration.permissionMarker)
+                    && mergedText.contains("hook claude permission")
+                    && mergedText.contains("PermissionRequest"),
+                "Claude permission bridge is installed as a blocking PermissionRequest hook"
+            )
 
             let repeated = try ClaudeHookConfiguration.merging(
                 existingData: merged.data,
@@ -375,7 +381,8 @@ private struct CheckSuite {
             expect(
                 removed.changed && removedText.contains("existing-observer")
                     && !removedText.contains(ClaudeHookConfiguration.marker)
-                    && !removedText.contains(ClaudeHookConfiguration.questionMarker),
+                    && !removedText.contains(ClaudeHookConfiguration.questionMarker)
+                    && !removedText.contains(ClaudeHookConfiguration.permissionMarker),
                 "Claude observer removal is marker scoped"
             )
         } catch {

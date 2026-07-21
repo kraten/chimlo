@@ -20,7 +20,12 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     var latestUserPrompt: String?
     var latestAgentResponse: String?
     var latestResponseReceivedAt: Date?
+    var permission: SessionPermissionPresentation?
     var question: SessionQuestionPresentation?
+
+    var hasActiveOwnerInteraction: Bool {
+        permission != nil || question != nil
+    }
 
     var displayTitle: String {
         guard let projectPath else { return title }
@@ -44,6 +49,11 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     }
 
     func preferredRowHeight(responseTextWidth: CGFloat) -> CGFloat {
+        if let permission {
+            let detailHeight: CGFloat = permission.request.detail == nil ? 0 : 30
+            let previewHeight: CGFloat = permission.request.preview == nil ? 0 : 104
+            return 70 + 66 + detailHeight + previewHeight
+        }
         if let question {
             let optionHeight = question.question.options.reduce(CGFloat.zero) { height, option in
                 height + (option.detail == nil ? 34 : 50)
@@ -104,6 +114,12 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
     }
 }
 
+struct SessionPermissionPresentation: Identifiable, Equatable, Sendable {
+    let request: ProviderPermissionRequest
+
+    var id: UUID { request.id }
+}
+
 struct SessionQuestionPresentation: Identifiable, Equatable, Sendable {
     let requestID: UUID
     let sessionID: String
@@ -137,6 +153,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var accessibility = AccessibilityEnvironment.current
     @Published private(set) var serverState: LocalServerState = .stopped
     @Published private(set) var pendingDecision: ChimloDecisionRequest?
+    @Published private(set) var sessionPermissions: [String: SessionPermissionPresentation] = [:]
     @Published private(set) var sessionQuestions: [String: SessionQuestionPresentation] = [:]
     @Published private(set) var islandLayout: IslandLayout
     @Published private(set) var codexConnectionState: AgentConnectionState = .checking
@@ -181,6 +198,9 @@ final class ApplicationModel: ObservableObject {
     private var pointerInsideIsland = false
     private var decisionExpiryTask: Task<Void, Never>?
     private var decisionContinuation: CheckedContinuation<ChimloDecisionResponse, Never>?
+    private var permissionRequests: [UUID: ProviderPermissionRequest] = [:]
+    private var permissionContinuations: [UUID: CheckedContinuation<ProviderPermissionResponse, Never>] = [:]
+    private var permissionExpiryTasks: [UUID: Task<Void, Never>] = [:]
     private var questionFlows: [UUID: QuestionFlow] = [:]
     private var questionContinuations: [UUID: CheckedContinuation<ProviderQuestionResponse, Never>] = [:]
     private var questionExpiryTasks: [UUID: Task<Void, Never>] = [:]
@@ -371,6 +391,12 @@ final class ApplicationModel: ObservableObject {
                 }
                 return await self.requestDecision(request)
             },
+            permit: { [weak self] request in
+                guard let self else {
+                    return .unavailable(for: request.id, reason: "Chimlo is closing")
+                }
+                return await self.requestPermission(request)
+            },
             answer: { [weak self] request in
                 guard let self else {
                     return .unavailable(for: request.id, reason: "Chimlo is closing")
@@ -412,6 +438,7 @@ final class ApplicationModel: ObservableObject {
         systemFeedback = nil
         mediaPlayback.stop()
         finishPendingDecision(outcome: .unavailable, note: "Chimlo closed before a decision was made")
+        finishAllPendingPermissions(note: "Chimlo closed before permission was decided")
         finishAllPendingQuestions(note: "Chimlo closed before an answer was selected")
         protocolBridge?.stop()
         protocolBridge = nil
@@ -447,6 +474,7 @@ final class ApplicationModel: ObservableObject {
             pointerInside: pointerInsideIsland,
             isSessionPanel: panelMode == .sessions,
             hasBlockingDecision: pendingDecision != nil
+                || !sessionPermissions.isEmpty
                 || !sessionQuestions.isEmpty
         ) else { return }
         collapseTask?.cancel()
@@ -457,6 +485,7 @@ final class ApplicationModel: ObservableObject {
                     pointerInside: pointerInsideIsland,
                     isSessionPanel: panelMode == .sessions,
                     hasBlockingDecision: pendingDecision != nil
+                        || !sessionPermissions.isEmpty
                         || !sessionQuestions.isEmpty
                   ) else { return }
             panelMode = .compact
@@ -644,7 +673,7 @@ final class ApplicationModel: ObservableObject {
         alert.messageText = "Connect \(provider.displayName) to Chimlo?"
         let filename = provider == .codex ? "hooks.json" : "settings.json"
         let questionNote = provider == .claude
-            ? " Claude questions route through Chimlo while it is running; Claude Code remains the fallback."
+            ? " Claude questions and permissions route through Chimlo while it is running; Claude Code remains the fallback."
             : ""
         alert.informativeText = "Review the complete merged \(filename) below. Existing settings stay in place, and Chimlo keeps a one-time backup before writing.\(questionNote)"
         alert.addButton(withTitle: "Connect")
@@ -672,6 +701,19 @@ final class ApplicationModel: ObservableObject {
 
     func respondToPendingDecision(approved: Bool) {
         finishPendingDecision(outcome: approved ? .approved : .denied, note: nil)
+    }
+
+    func respondToSessionPermission(
+        sessionID: String,
+        outcome: ProviderPermissionOutcome
+    ) {
+        guard let request = sessionPermissions[sessionID]?.request,
+              outcome == .allowedOnce
+                || outcome == .denied
+                || outcome == .allowedForSession else {
+            return
+        }
+        finishPermission(requestID: request.id, outcome: outcome, note: nil)
     }
 
     func selectQuestionOption(sessionID: String, label: String) {
@@ -871,7 +913,7 @@ final class ApplicationModel: ObservableObject {
     }
 
     private func syncSessionProjections() {
-        sessions = reducer.orderedSessions.compactMap { session in
+        let projectedSessions: [SessionDisplayModel] = reducer.orderedSessions.compactMap { session in
             guard !hiddenSessionIDs.contains(session.id),
                   archivedSessionMarkers[session.id] == nil else { return nil }
             let isDemo = demoSessionIDs.contains(session.id)
@@ -882,7 +924,9 @@ final class ApplicationModel: ObservableObject {
                 detail: session.detail,
                 mood: mood(for: session),
                 isDemo: isDemo,
-                needsAttention: session.pendingRequest != nil || session.phase == .failed,
+                needsAttention: session.pendingRequest != nil
+                    || sessionPermissions[session.id] != nil
+                    || session.phase == .failed,
                 terminal: session.terminal,
                 projectPath: session.projectPath,
                 jumpURL: session.jumpURL,
@@ -890,9 +934,18 @@ final class ApplicationModel: ObservableObject {
                 latestUserPrompt: session.latestUserPrompt,
                 latestAgentResponse: session.latestAgentResponse,
                 latestResponseReceivedAt: latestResponseReceivedAt[session.id],
+                permission: sessionPermissions[session.id],
                 question: sessionQuestions[session.id]
             )
         }
+
+        sessions = projectedSessions.enumerated().sorted { left, right in
+            if left.element.hasActiveOwnerInteraction
+                != right.element.hasActiveOwnerInteraction {
+                return left.element.hasActiveOwnerInteraction
+            }
+            return left.offset < right.offset
+        }.map { $0.element }
     }
 
     private func configureSessionRuntime() {
@@ -1115,13 +1168,137 @@ final class ApplicationModel: ObservableObject {
         }
     }
 
+    private func requestPermission(
+        _ request: ProviderPermissionRequest
+    ) async -> ProviderPermissionResponse {
+        if let expiresAt = request.expiresAt, expiresAt <= Date() {
+            return .unavailable(for: request.id, reason: "Permission request expired")
+        }
+        guard request.agent == .claude,
+              !request.sessionID.isEmpty,
+              !request.toolName.isEmpty,
+              !request.prompt.isEmpty,
+              request.allowsSessionApproval,
+              sessionPermissions[request.sessionID] == nil,
+              sessionQuestions[request.sessionID] == nil else {
+            return .unavailable(
+                for: request.id,
+                reason: "This session already has a pending owner interaction"
+            )
+        }
+
+        return await withCheckedContinuation { continuation in
+            cancelCollapse()
+            permissionRequests[request.id] = request
+            permissionContinuations[request.id] = continuation
+            sessionPermissions[request.sessionID] = SessionPermissionPresentation(request: request)
+            presentPermissionEvent(for: request)
+            panelMode = .sessions
+            schedulePermissionExpiry(for: request)
+        }
+    }
+
+    private func presentPermissionEvent(for request: ProviderPermissionRequest) {
+        receiveLiveEvent(
+            AgentEvent(
+                sessionID: request.sessionID,
+                sequence: 0,
+                kind: .permissionRequested,
+                agent: request.agent,
+                title: request.title,
+                detail: "Permission from Claude Code",
+                request: .approval(
+                    ApprovalRequest(
+                        id: request.id.uuidString,
+                        summary: "Permission requested for \(request.toolName)"
+                    )
+                ),
+                timestamp: .now
+            )
+        )
+    }
+
+    private func schedulePermissionExpiry(for request: ProviderPermissionRequest) {
+        guard let expiresAt = request.expiresAt else { return }
+        let nanoseconds = UInt64(max(0, expiresAt.timeIntervalSinceNow) * 1_000_000_000)
+        permissionExpiryTasks[request.id] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.finishPermission(
+                requestID: request.id,
+                outcome: .unavailable,
+                note: "Permission request expired"
+            )
+        }
+    }
+
+    private func finishPermission(
+        requestID: UUID,
+        outcome: ProviderPermissionOutcome,
+        note: String?
+    ) {
+        guard let request = permissionRequests.removeValue(forKey: requestID) else { return }
+        permissionExpiryTasks.removeValue(forKey: requestID)?.cancel()
+        if sessionPermissions[request.sessionID]?.request.id == requestID {
+            sessionPermissions.removeValue(forKey: request.sessionID)
+        }
+
+        if let current = reducer.sessions[request.sessionID] {
+            let detail = switch outcome {
+            case .allowedOnce: "Allowed once in Claude Code"
+            case .allowedForSession: "Allowed for this Claude Code session"
+            case .denied: "Permission denied in Chimlo"
+            case .cancelled, .unavailable: "Answer in Claude Code"
+            }
+            let decision: UserDecision? = switch outcome {
+            case .allowedOnce, .allowedForSession: .allow
+            case .denied: .deny
+            case .cancelled, .unavailable: nil
+            }
+            consume(
+                AgentEvent(
+                    sessionID: current.id,
+                    sequence: current.lastSequence + 1,
+                    kind: .permissionResolved,
+                    agent: current.agent,
+                    detail: detail,
+                    decision: decision,
+                    timestamp: .now
+                ),
+                isDemo: false
+            )
+        } else {
+            syncSessionProjections()
+        }
+
+        let continuation = permissionContinuations.removeValue(forKey: requestID)
+        continuation?.resume(returning: ProviderPermissionResponse(
+            requestID: requestID,
+            outcome: outcome,
+            note: note
+        ))
+        scheduleCollapseAfterHover()
+    }
+
+    private func finishAllPendingPermissions(note: String) {
+        let requestIDs = Array(permissionRequests.keys)
+        for requestID in requestIDs {
+            finishPermission(
+                requestID: requestID,
+                outcome: .unavailable,
+                note: note
+            )
+        }
+    }
+
     private func requestQuestion(_ request: ProviderQuestionRequest) async -> ProviderQuestionResponse {
         if let expiresAt = request.expiresAt, expiresAt <= Date() {
             return .unavailable(for: request.id, reason: "Question request expired")
         }
         guard !request.questions.isEmpty,
               request.questions.allSatisfy({ !$0.prompt.isEmpty && !$0.options.isEmpty }),
-              sessionQuestions[request.sessionID] == nil else {
+              sessionQuestions[request.sessionID] == nil,
+              sessionPermissions[request.sessionID] == nil else {
             return .unavailable(for: request.id, reason: "This session already has a pending question")
         }
 

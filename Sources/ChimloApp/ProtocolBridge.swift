@@ -21,6 +21,7 @@ final class ProtocolBridge {
     func start(
         receive: @escaping @MainActor @Sendable (AgentEvent) -> Void,
         decide: @escaping @MainActor @Sendable (ChimloDecisionRequest) async -> ChimloDecisionResponse,
+        permit: @escaping @MainActor @Sendable (ProviderPermissionRequest) async -> ProviderPermissionResponse,
         answer: @escaping @MainActor @Sendable (ProviderQuestionRequest) async -> ProviderQuestionResponse,
         stateChanged: @escaping @MainActor @Sendable (LocalServerState) -> Void
     ) {
@@ -37,6 +38,9 @@ final class ProtocolBridge {
                     },
                     decisionHandler: { request in
                         await decide(request)
+                    },
+                    permissionHandler: { request in
+                        await permit(request)
                     },
                     questionHandler: { request in
                         await answer(request)

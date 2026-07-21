@@ -250,7 +250,7 @@ private struct AgentSettingsPane: View {
             } header: {
                 Text("Agent connections")
             } footer: {
-                Text("Connect installs Chimlo's local session bridge. Claude questions can be answered in Chimlo; existing agent settings are preserved.")
+                Text("Connect installs Chimlo's local session bridge. Claude questions and permissions can be answered in Chimlo; existing agent settings are preserved.")
             }
 
             Section("Local bridge") {
