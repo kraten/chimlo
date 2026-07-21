@@ -152,6 +152,21 @@ private struct GeneralSettingsPane: View {
             }
 
             Section {
+                Toggle(
+                    "Show volume and brightness in Chimlo",
+                    isOn: $model.replacesSystemFeedback
+                )
+
+                LabeledContent("Status") {
+                    feedbackStatus
+                }
+            } header: {
+                Text("System feedback")
+            } footer: {
+                Text("Chimlo needs Accessibility access to receive the media keys. If it cannot control the current output or display safely, macOS remains in charge.")
+            }
+
+            Section {
                 Toggle("Show a preview session when disconnected", isOn: $model.keepPreviewSession)
 
                 LabeledContent("First-run tour") {
@@ -176,6 +191,38 @@ private struct GeneralSettingsPane: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(SettingsAppearance.detailBackground)
+    }
+
+    @ViewBuilder
+    private var feedbackStatus: some View {
+        switch model.systemFeedbackState {
+        case .permissionRequired:
+            HStack(spacing: 8) {
+                Text(model.systemFeedbackStatusText)
+                    .foregroundStyle(.secondary)
+                Button("Allow") {
+                    model.requestSystemFeedbackPermission()
+                }
+                .controlSize(.small)
+                Button("Settings") {
+                    model.openAccessibilitySettings()
+                }
+                .controlSize(.small)
+            }
+        case .unavailable:
+            HStack(spacing: 8) {
+                Text(model.systemFeedbackStatusText)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Button("Retry") {
+                    model.retrySystemFeedback()
+                }
+                .controlSize(.small)
+            }
+        default:
+            Text(model.systemFeedbackStatusText)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

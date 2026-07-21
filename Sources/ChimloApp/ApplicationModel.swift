@@ -122,6 +122,8 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var codexConnectionState: AgentConnectionState = .checking
     @Published private(set) var claudeConnectionState: AgentConnectionState = .checking
     @Published private(set) var isScanningSessions = true
+    @Published private(set) var systemFeedback: SystemFeedbackPresentation?
+    @Published private(set) var systemFeedbackState: SystemFeedbackEngineState = .disabled
 
     @Published var soundsEnabled: Bool {
         didSet { defaults.set(soundsEnabled, forKey: Keys.soundsEnabled) }
@@ -129,9 +131,21 @@ final class ApplicationModel: ObservableObject {
     @Published var keepPreviewSession: Bool {
         didSet { defaults.set(keepPreviewSession, forKey: Keys.keepPreviewSession) }
     }
+    @Published var replacesSystemFeedback: Bool {
+        didSet {
+            defaults.set(replacesSystemFeedback, forKey: Keys.replacesSystemFeedback)
+            guard hasStarted else { return }
+            systemFeedbackEngine.setEnabled(
+                replacesSystemFeedback,
+                promptForPermission: replacesSystemFeedback
+            )
+            if !replacesSystemFeedback { clearSystemFeedback() }
+        }
+    }
 
     private let defaults: UserDefaults
     private let chiptunePlayer = ChiptunePlayer()
+    private let systemFeedbackEngine = SystemFeedbackEngine()
     private var reducer = SessionReducer()
     private var demoSessionIDs: Set<String> = []
     private var previewSessionIDs: Set<String> = []
@@ -156,6 +170,7 @@ final class ApplicationModel: ObservableObject {
     private var latestResponseReceivedAt: [String: Date] = [:]
     private var completionDetailExpiryTasks: [String: Task<Void, Never>] = [:]
     private var lastPresentedResponse: [String: String] = [:]
+    private var systemFeedbackExpiryTask: Task<Void, Never>?
 
     var panelSize: CGSize {
         switch panelMode {
@@ -204,6 +219,21 @@ final class ApplicationModel: ObservableObject {
             "Listening locally on port \(port)"
         case .failed:
             "Local listener unavailable"
+        }
+    }
+
+    var systemFeedbackStatusText: String {
+        switch systemFeedbackState {
+        case .disabled:
+            return "Native macOS feedback"
+        case .starting:
+            return "Preparing Chimlo feedback"
+        case .permissionRequired:
+            return "Accessibility permission required"
+        case .active:
+            return "Volume and brightness appear in Chimlo"
+        case let .unavailable(reason):
+            return reason
         }
     }
 
@@ -261,6 +291,7 @@ final class ApplicationModel: ObservableObject {
         )
         soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         keepPreviewSession = defaults.object(forKey: Keys.keepPreviewSession) as? Bool ?? true
+        replacesSystemFeedback = defaults.object(forKey: Keys.replacesSystemFeedback) as? Bool ?? true
     }
 
     func start() {
@@ -272,6 +303,24 @@ final class ApplicationModel: ObservableObject {
             selector: #selector(accessibilityOptionsChanged),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationBecameActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        systemFeedbackEngine.presentationChanged = { [weak self] presentation in
+            self?.presentSystemFeedback(presentation)
+        }
+        systemFeedbackEngine.stateChanged = { [weak self] state in
+            self?.systemFeedbackState = state
+            if state != .active { self?.clearSystemFeedback() }
+        }
+        systemFeedbackEngine.setEnabled(
+            replacesSystemFeedback,
+            promptForPermission: replacesSystemFeedback
         )
 
         let bridge = ProtocolBridge()
@@ -313,6 +362,12 @@ final class ApplicationModel: ObservableObject {
         onboardingTask?.cancel()
         collapseTask?.cancel()
         decisionExpiryTask?.cancel()
+        systemFeedbackExpiryTask?.cancel()
+        systemFeedbackExpiryTask = nil
+        systemFeedbackEngine.stop()
+        systemFeedbackEngine.presentationChanged = nil
+        systemFeedbackEngine.stateChanged = nil
+        systemFeedback = nil
         finishPendingDecision(outcome: .unavailable, note: "Chimlo closed before a decision was made")
         protocolBridge?.stop()
         protocolBridge = nil
@@ -469,6 +524,23 @@ final class ApplicationModel: ObservableObject {
 
     func previewSound() {
         chiptunePlayer.play(.success)
+    }
+
+    func requestSystemFeedbackPermission() {
+        guard replacesSystemFeedback else { return }
+        systemFeedbackEngine.retry(promptForPermission: true)
+    }
+
+    func retrySystemFeedback() {
+        guard replacesSystemFeedback else { return }
+        systemFeedbackEngine.retry(promptForPermission: false)
+    }
+
+    func openAccessibilitySettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func refreshAgentConnections() {
@@ -1038,10 +1110,33 @@ final class ApplicationModel: ObservableObject {
         accessibility = .current
     }
 
+    @objc private func applicationBecameActive() {
+        guard replacesSystemFeedback else { return }
+        systemFeedbackEngine.retry(promptForPermission: false)
+    }
+
+    private func presentSystemFeedback(_ presentation: SystemFeedbackPresentation) {
+        systemFeedback = presentation
+        systemFeedbackExpiryTask?.cancel()
+        systemFeedbackExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(SystemFeedbackPolicy.holdMilliseconds))
+            guard !Task.isCancelled, let self else { return }
+            systemFeedback = nil
+            systemFeedbackExpiryTask = nil
+        }
+    }
+
+    private func clearSystemFeedback() {
+        systemFeedbackExpiryTask?.cancel()
+        systemFeedbackExpiryTask = nil
+        systemFeedback = nil
+    }
+
     private enum Keys {
         static let completedOnboarding = "chimlo.onboarding.completed"
         static let soundsEnabled = "chimlo.sound.enabled"
         static let keepPreviewSession = "chimlo.preview.keepSession"
+        static let replacesSystemFeedback = "chimlo.systemFeedback.replacesNative"
         static let archivedSessions = "chimlo.sessions.archived"
     }
 }

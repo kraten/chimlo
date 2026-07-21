@@ -33,6 +33,7 @@ private struct CheckSuite {
 
     mutating func run() async {
         notchLayout()
+        systemFeedback()
         hookPrivacyMapping()
         transcriptMetadataPrivacy()
         sessionArchiveVisibility()
@@ -49,6 +50,27 @@ private struct CheckSuite {
 
     mutating func runLayoutOnly() {
         notchLayout()
+        systemFeedback()
+    }
+
+    mutating func systemFeedback() {
+        let volume = SystemFeedbackPresentation(
+            kind: .outputVolume,
+            value: 0.5
+        )
+        expect(volume.percentage == 50, "system feedback exposes an exact percentage")
+        expect(
+            volume.accessibilityDescription == "Output volume 50 percent",
+            "system feedback announces the exact percentage"
+        )
+        expect(
+            SystemFeedbackPolicy.meterFillWidth(for: volume.value, trackWidth: 23) == 11.5,
+            "system feedback fills the pixel meter to the exact value"
+        )
+        expect(
+            SystemFeedbackPolicy.adjustedValue(from: 0.5, direction: 1, fine: false) == 0.5625,
+            "system feedback uses native-sized coarse steps"
+        )
     }
 
     mutating func notchLayout() {
@@ -72,6 +94,10 @@ private struct CheckSuite {
         expect(layout.expandedNeckWidth == 249, "expanded panel grows from the compact notch neck")
         expect(layout.cameraHousingWidth == 185, "compact center matches the physical camera housing")
         expect(layout.activityWingWidth == 32, "compact activity wings remain symmetric")
+        expect(
+            layout.activityWingWidth >= 23,
+            "compact activity wings fully contain the system feedback meter"
+        )
 
         let expandedSilhouette = ExpandedIslandSilhouette(
             width: layout.expandedWidth

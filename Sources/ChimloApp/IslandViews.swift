@@ -1,3 +1,4 @@
+import ChimloCore
 import ChimloProtocol
 import SwiftUI
 
@@ -30,6 +31,15 @@ struct IslandRootView: View {
                         .padding(.horizontal, 18)
                         .padding(.top, model.islandLayout.expandedContentTopInset + 12)
                         .padding(.bottom, 18)
+                    if model.islandLayout.hasCameraHousing,
+                       let feedback = model.systemFeedback {
+                        SystemFeedbackNotchBand(
+                            feedback: feedback,
+                            cameraWidth: model.islandLayout.cameraHousingWidth,
+                            reduceMotion: model.accessibility.reduceMotion
+                        )
+                        .frame(height: model.islandLayout.expandedContentTopInset)
+                    }
                 }
             }
             // Follow AppKit's live, intermediate bounds while the NSPanel grows
@@ -67,48 +77,58 @@ private struct ExpandedStatusBand: View {
     let openSettings: () -> Void
 
     var body: some View {
-        GeometryReader { geometry in
-            let cameraWidth = min(model.islandLayout.cameraHousingWidth, geometry.size.width)
-            let wingWidth = max(0, (geometry.size.width - cameraWidth) / 2)
+        Group {
+            if let feedback = model.systemFeedback {
+                SystemFeedbackNotchBand(
+                    feedback: feedback,
+                    cameraWidth: model.islandLayout.cameraHousingWidth,
+                    reduceMotion: model.accessibility.reduceMotion
+                )
+            } else {
+                GeometryReader { geometry in
+                    let cameraWidth = min(model.islandLayout.cameraHousingWidth, geometry.size.width)
+                    let wingWidth = max(0, (geometry.size.width - cameraWidth) / 2)
 
-            HStack(spacing: 0) {
-                PixelText(text: "CHIMLO", pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
-                    .padding(.leading, 10)
-                    .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
-                    .clipped()
-                    .accessibilityHidden(true)
+                    HStack(spacing: 0) {
+                        PixelText(text: "CHIMLO", pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+                            .padding(.leading, 10)
+                            .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
+                            .clipped()
+                            .accessibilityHidden(true)
 
-                Color.clear
-                    .frame(width: cameraWidth, height: geometry.size.height)
-                    .accessibilityHidden(true)
+                        Color.clear
+                            .frame(width: cameraWidth, height: geometry.size.height)
+                            .accessibilityHidden(true)
 
-                HStack(spacing: 0) {
-                    Button {
-                        model.soundsEnabled.toggle()
-                    } label: {
-                        Image(systemName: model.soundsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                        HStack(spacing: 0) {
+                            Button {
+                                model.soundsEnabled.toggle()
+                            } label: {
+                                Image(systemName: model.soundsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .buttonStyle(
+                                ExpandedControlButtonStyle(
+                                    color: model.soundsEnabled ? ChimloTheme.paper : ChimloTheme.clayText
+                                )
+                            )
+                            .help(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
+                            .accessibilityLabel(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
+                            .accessibilityValue(model.soundsEnabled ? "Sounds on" : "Sounds muted")
+
+                            Button(action: openSettings) {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .buttonStyle(ExpandedControlButtonStyle(color: ChimloTheme.quietPaper))
+                            .help("Open Chimlo settings")
+                            .accessibilityLabel("Open Chimlo settings")
+                        }
+                        .padding(.trailing, 7)
+                        .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
+                        .clipped()
                     }
-                    .buttonStyle(
-                        ExpandedControlButtonStyle(
-                            color: model.soundsEnabled ? ChimloTheme.paper : ChimloTheme.clayText
-                        )
-                    )
-                    .help(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
-                    .accessibilityLabel(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
-                    .accessibilityValue(model.soundsEnabled ? "Sounds on" : "Sounds muted")
-
-                    Button(action: openSettings) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .buttonStyle(ExpandedControlButtonStyle(color: ChimloTheme.quietPaper))
-                    .help("Open Chimlo settings")
-                    .accessibilityLabel("Open Chimlo settings")
                 }
-                .padding(.trailing, 7)
-                .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
-                .clipped()
             }
         }
         .frame(height: model.islandLayout.expandedContentTopInset)
@@ -126,13 +146,164 @@ private struct ExpandedControlButtonStyle: ButtonStyle {
     }
 }
 
+private struct SystemFeedbackNotchBand: View {
+    let feedback: SystemFeedbackPresentation
+    let cameraWidth: CGFloat
+    let reduceMotion: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            let resolvedCameraWidth = min(cameraWidth, geometry.size.width)
+            let wingWidth = max(0, (geometry.size.width - resolvedCameraWidth) / 2)
+
+            HStack(spacing: 0) {
+                PixelSystemGlyph(kind: glyphKind, size: 16)
+                    .padding(.trailing, min(10, max(0, wingWidth - 16)))
+                    .frame(width: wingWidth, height: geometry.size.height, alignment: .trailing)
+                    .clipped()
+
+                Color.clear
+                    .frame(width: resolvedCameraWidth, height: geometry.size.height)
+                    .accessibilityHidden(true)
+
+                PixelLevelMeter(value: feedback.value, reduceMotion: reduceMotion)
+                    .padding(.leading, min(10, max(0, wingWidth - 23)))
+                    .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
+                    .clipped()
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(feedback.accessibilityDescription)
+    }
+
+    private var glyphKind: PixelSystemGlyphKind {
+        switch feedback.kind {
+        case .outputVolume:
+            feedback.isMuted || feedback.value == 0 ? .mutedSpeaker : .speaker
+        case .displayBrightness:
+            .sun
+        }
+    }
+}
+
+private struct PixelLevelMeter: View {
+    let value: Double
+    let reduceMotion: Bool
+
+    private let trackWidth: CGFloat = 23
+
+    private var fillWidth: CGFloat {
+        CGFloat(SystemFeedbackPolicy.meterFillWidth(
+            for: value,
+            trackWidth: Double(trackWidth)
+        ))
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            PixelMeterPips(color: ChimloTheme.mutedPaper)
+            PixelMeterPips(color: ChimloTheme.paper)
+                .mask(alignment: .leading) {
+                    Rectangle()
+                        .frame(width: fillWidth, height: 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+        }
+        .frame(width: trackWidth, height: 12, alignment: .center)
+        .animation(
+            reduceMotion ? nil : .linear(duration: 0.09),
+            value: fillWidth
+        )
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PixelMeterPips: View {
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<SystemFeedbackPolicy.meterCellCount, id: \.self) { _ in
+                Rectangle()
+                    .fill(color)
+                    .frame(width: 2, height: 8)
+            }
+        }
+    }
+}
+
+private struct SystemFeedbackCompactContent: View {
+    let feedback: SystemFeedbackPresentation
+    let model: ApplicationModel
+
+    var body: some View {
+        if model.islandLayout.hasCameraHousing {
+            HStack(spacing: 0) {
+                PixelSystemGlyph(kind: glyphKind, size: 16)
+                    .frame(
+                        width: model.islandLayout.activityWingWidth,
+                        height: model.islandLayout.compactHeight,
+                        alignment: .center
+                    )
+
+                Color.clear
+                    .frame(
+                        width: model.islandLayout.cameraHousingWidth,
+                        height: model.islandLayout.compactHeight
+                    )
+
+                PixelLevelMeter(
+                    value: feedback.value,
+                    reduceMotion: model.accessibility.reduceMotion
+                )
+                .frame(
+                    width: model.islandLayout.activityWingWidth,
+                    height: model.islandLayout.compactHeight,
+                    alignment: .center
+                )
+            }
+        } else {
+            HStack(spacing: 8) {
+                PixelSystemGlyph(kind: glyphKind, size: 16)
+                PixelText(text: shortLabel, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+                Spacer(minLength: 4)
+                PixelLevelMeter(
+                    value: feedback.value,
+                    reduceMotion: model.accessibility.reduceMotion
+                )
+                PixelText(
+                    text: "\(feedback.percentage)%",
+                    pixelSize: 1,
+                    color: ChimloTheme.paper,
+                    spacing: 1
+                )
+            }
+        }
+    }
+
+    private var glyphKind: PixelSystemGlyphKind {
+        switch feedback.kind {
+        case .outputVolume:
+            feedback.isMuted || feedback.value == 0 ? .mutedSpeaker : .speaker
+        case .displayBrightness:
+            .sun
+        }
+    }
+
+    private var shortLabel: String {
+        feedback.kind == .outputVolume ? "VOL" : "LUX"
+    }
+}
+
 private struct CompactIslandView: View {
     @ObservedObject var model: ApplicationModel
 
     var body: some View {
         Button(action: model.openPanel) {
             Group {
-                if model.islandLayout.hasCameraHousing {
+                if let feedback = model.systemFeedback {
+                    SystemFeedbackCompactContent(feedback: feedback, model: model)
+                } else if model.islandLayout.hasCameraHousing {
                     notchContent
                 } else {
                     standardContent
@@ -141,7 +312,14 @@ private struct CompactIslandView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open Chimlo. \(summary). \(model.compactLabel.lowercased()).")
+        .accessibilityLabel(compactAccessibilityLabel)
+    }
+
+    private var compactAccessibilityLabel: String {
+        if let feedback = model.systemFeedback {
+            return "Open Chimlo. \(feedback.accessibilityDescription)."
+        }
+        return "Open Chimlo. \(summary). \(model.compactLabel.lowercased())."
     }
 
     private var standardContent: some View {

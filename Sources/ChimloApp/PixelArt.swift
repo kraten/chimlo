@@ -305,6 +305,60 @@ struct PixelJumpMark: View {
     }
 }
 
+enum PixelSystemGlyphKind: Equatable {
+    case speaker
+    case mutedSpeaker
+    case sun
+}
+
+/// Chimlo-owned 7x7 system glyphs. These share the avatar's square-pixel
+/// construction instead of imitating macOS or another notch app's symbols.
+struct PixelSystemGlyph: View {
+    let kind: PixelSystemGlyphKind
+    var color: Color = ChimloTheme.paper
+    var size: CGFloat = 16
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .nonLinear, rendersAsynchronously: false) { context, canvasSize in
+            let sprite = spriteRows
+            let unit = max(1, floor(min(canvasSize.width, canvasSize.height) / 7))
+            let drawingSize = unit * 7
+            let origin = CGPoint(
+                x: floor((canvasSize.width - drawingSize) / 2),
+                y: floor((canvasSize.height - drawingSize) / 2)
+            )
+
+            for (row, line) in sprite.enumerated() {
+                for (column, bit) in line.enumerated() where bit == "1" {
+                    context.fill(
+                        Path(CGRect(
+                            x: origin.x + CGFloat(column) * unit,
+                            y: origin.y + CGFloat(row) * unit,
+                            width: unit,
+                            height: unit
+                        )),
+                        with: .color(color)
+                    )
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private var spriteRows: [[Character]] {
+        let encoded = switch kind {
+        case .speaker:
+            "0010000/0110100/1110010/1110001/1110010/0110100/0010000"
+        case .mutedSpeaker:
+            "0010001/0110010/1110100/1110000/1110100/0110010/0010001"
+        case .sun:
+            "0010100/1001001/0111110/0011100/0111110/1001001/0010100"
+        }
+        return encoded.split(separator: "/").map(Array.init)
+    }
+}
+
 struct PixelText: View {
     let text: String
     var pixelSize: CGFloat = 2
@@ -354,6 +408,7 @@ private enum PixelGlyphs {
         "?": "01110/10001/00001/00010/00100/00000/00100",
         "-": "00000/00000/00000/11111/00000/00000/00000",
         ".": "00000/00000/00000/00000/00000/00110/00110",
+        "%": "11001/11010/00100/01000/10110/00110/00000",
         "0": "01110/10001/10011/10101/11001/10001/01110",
         "1": "00100/01100/00100/00100/00100/00100/01110",
         "2": "01110/10001/00001/00010/00100/01000/11111",

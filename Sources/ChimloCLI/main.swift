@@ -43,6 +43,13 @@ enum ChimloCommand {
             let store = try RuntimeDescriptorStore.live()
             let descriptor = try store.read()
             print("\(descriptor.host):\(descriptor.port) pid=\(descriptor.processID) protocol=\(descriptor.protocolVersion)")
+        case "__native-overlay-guard":
+            guard arguments.count == 2,
+                  let ownerPID = Int32(arguments[1]),
+                  ownerPID > 0 else {
+                throw CLIError("Invalid overlay owner process")
+            }
+            await restoreNativeOverlayWhenOwnerExits(ownerPID)
         case "help", "--help", "-h":
             print(usage)
         default:
@@ -229,6 +236,29 @@ enum ChimloCommand {
             throw CLIError("Date must use ISO-8601, for example 2026-07-20T12:00:00Z")
         }
         return date
+    }
+
+    /// A deliberately tiny crash-recovery companion. Chimlo's app process can
+    /// temporarily pause Apple's visual OSD while it owns media-key handling.
+    /// This independent process survives an app crash and restores that helper.
+    private static func restoreNativeOverlayWhenOwnerExits(_ ownerPID: Int32) async {
+        while processExists(ownerPID) {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
+        let resume = Process()
+        resume.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        resume.arguments = ["-CONT", "OSDUIHelper"]
+        resume.standardOutput = FileHandle.nullDevice
+        resume.standardError = FileHandle.nullDevice
+        try? resume.run()
+        resume.waitUntilExit()
+    }
+
+    private static func processExists(_ processID: Int32) -> Bool {
+        errno = 0
+        if Darwin.kill(processID, 0) == 0 { return true }
+        return errno == EPERM
     }
 
     private static func writeError(_ text: String) {
