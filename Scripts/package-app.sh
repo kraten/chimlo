@@ -3,13 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-APP_DIR="$PROJECT_DIR/dist/Chimlo.app"
-CONTENTS_DIR="$APP_DIR/Contents"
-MACOS_DIR="$CONTENTS_DIR/MacOS"
-HELPERS_DIR="$CONTENTS_DIR/Helpers"
-RESOURCES_DIR="$CONTENTS_DIR/Resources"
+TARGET_APP_DIR="$PROJECT_DIR/dist/Chimlo.app"
 MEDIAREMOTE_SOURCE_DIR="$PROJECT_DIR/Vendor/MediaRemoteAdapter"
-MEDIAREMOTE_DESTINATION_DIR="$RESOURCES_DIR/MediaRemoteAdapter"
 source "$SCRIPT_DIR/signing-common.sh"
 
 cd "$PROJECT_DIR"
@@ -22,7 +17,19 @@ else
   BIN_DIR="$(swift build --disable-sandbox -c release --show-bin-path)"
 fi
 
-rm -rf "$APP_DIR"
+STAGING_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/chimlo-package.XXXXXX")"
+APP_DIR="$STAGING_ROOT/Chimlo.app"
+CONTENTS_DIR="$APP_DIR/Contents"
+MACOS_DIR="$CONTENTS_DIR/MacOS"
+HELPERS_DIR="$CONTENTS_DIR/Helpers"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+MEDIAREMOTE_DESTINATION_DIR="$RESOURCES_DIR/MediaRemoteAdapter"
+
+cleanup_staging() {
+  rm -rf "$STAGING_ROOT"
+}
+trap cleanup_staging EXIT
+
 mkdir -p "$MACOS_DIR" "$HELPERS_DIR" "$MEDIAREMOTE_DESTINATION_DIR"
 cp "$PROJECT_DIR/Packaging/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$BIN_DIR/ChimloApp" "$MACOS_DIR/Chimlo"
@@ -53,4 +60,10 @@ if command -v codesign >/dev/null 2>&1; then
   fi
 fi
 
-echo "$APP_DIR"
+mkdir -p "${TARGET_APP_DIR:h}"
+rm -rf "$TARGET_APP_DIR"
+mv "$APP_DIR" "$TARGET_APP_DIR"
+rmdir "$STAGING_ROOT"
+trap - EXIT
+
+echo "$TARGET_APP_DIR"

@@ -50,9 +50,31 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
 
     func preferredRowHeight(responseTextWidth: CGFloat) -> CGFloat {
         if let permission {
-            let detailHeight: CGFloat = permission.request.detail == nil ? 0 : 30
-            let previewHeight: CGFloat = permission.request.preview == nil ? 0 : 104
-            return 70 + 66 + detailHeight + previewHeight
+            let request = permission.request
+            let promptLineCount = measuredLineCount(
+                request.prompt,
+                font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                width: responseTextWidth
+            )
+            let detailLineCount = request.detail.map {
+                measuredLineCount(
+                    $0,
+                    font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                    width: responseTextWidth
+                )
+            }
+            let previewLineCount = request.preview.map {
+                measuredLineCount(
+                    $0,
+                    font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .medium),
+                    width: max(1, responseTextWidth - 18)
+                )
+            }
+            return SessionInteractionLayout.permissionRowHeight(
+                promptLineCount: promptLineCount,
+                detailLineCount: detailLineCount,
+                previewLineCount: previewLineCount
+            )
         }
         if let question {
             let optionHeight = question.question.options.reduce(CGFloat.zero) { height, option in
@@ -102,7 +124,7 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
         _ text: String,
         font: NSFont,
         width: CGFloat,
-        maximum: Int
+        maximum: Int? = nil
     ) -> Int {
         let lineHeight = max(1, ceil(font.ascender - font.descender + font.leading))
         let bounds = (text as NSString).boundingRect(
@@ -110,7 +132,8 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: font]
         )
-        return min(maximum, max(1, Int(ceil(bounds.height / lineHeight))))
+        let measured = max(1, Int(ceil(bounds.height / lineHeight)))
+        return maximum.map { min($0, measured) } ?? measured
     }
 }
 
@@ -225,20 +248,16 @@ final class ApplicationModel: ObservableObject {
             return CGSize(width: islandLayout.compactWidth, height: islandLayout.compactHeight)
         case .sessions:
             let responseTextWidth = max(1, islandLayout.expandedWidth - 56)
-            let rowsHeight = displayedSessions.reduce(CGFloat.zero) { partial, session in
-                partial + session.preferredRowHeight(responseTextWidth: responseTextWidth)
+            let displayedRowHeights = displayedSessions.map { session in
+                session.preferredRowHeight(responseTextWidth: responseTextWidth)
             }
-            let rowSpacing = CGFloat(max(0, displayedSessions.count - 1)) * 6
-            let rowHeight: CGFloat
-            if sessions.isEmpty, pendingDecision == nil {
-                rowHeight = 62
-            } else {
-                rowHeight = min(320, rowsHeight + rowSpacing)
-            }
-            let decisionHeight: CGFloat = pendingDecision == nil ? 0 : 132
-            // Includes the LazyVStack gap above the 28-point disclosure control.
-            let revealHeight: CGFloat = canRevealAllSessions ? 34 : 0
-            let contentHeight = min(366, 12 + rowHeight + decisionHeight + revealHeight)
+            let contentHeight = SessionListLayout.contentHeight(
+                displayedRowHeights: displayedRowHeights,
+                hasSessions: !sessions.isEmpty,
+                hasDecision: pendingDecision != nil,
+                showsDisclosureControl: canRevealAllSessions,
+                isDisclosureContextActive: hasActiveOwnerInteraction
+            )
             return CGSize(
                 width: islandLayout.expandedWidth,
                 height: islandLayout.expandedContentTopInset + contentHeight
@@ -893,6 +912,7 @@ final class ApplicationModel: ObservableObject {
         }
 
         if let session = reducer.sessions[event.sessionID],
+           sessions.contains(where: { $0.id == event.sessionID }),
            (session.pendingRequest != nil || session.phase == .failed),
            panelMode != .onboarding {
             cancelCollapse()
@@ -936,7 +956,8 @@ final class ApplicationModel: ObservableObject {
 
     @discardableResult
     private func presentCompletionIfNeeded(sessionID: String, receivedAt: Date) -> Bool {
-        guard panelMode != .onboarding,
+        guard sessions.contains(where: { $0.id == sessionID }),
+              panelMode != .onboarding,
               receivedAt >= Date.now.addingTimeInterval(
                 -IslandCollapsePolicy.completionDetailLifetimeSeconds
               ),
@@ -952,12 +973,20 @@ final class ApplicationModel: ObservableObject {
 
     private func syncSessionProjections() {
         let projectedSessions: [SessionDisplayModel] = reducer.orderedSessions.compactMap { session in
+            let isDemo = demoSessionIDs.contains(session.id)
+            let hasActionableRequest = session.pendingRequest != nil
+                || sessionPermissions[session.id] != nil
+                || sessionQuestions[session.id] != nil
             guard !hiddenSessionIDs.contains(session.id),
                   archivedSessionMarkers[session.id] == nil,
-                  !session.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                  SessionVisibilityPolicy.shouldDisplay(
+                    title: session.title,
+                    titleKind: session.titleKind,
+                    isDemo: isDemo,
+                    hasActionableRequest: hasActionableRequest
+                  ) else {
                 return nil
             }
-            let isDemo = demoSessionIDs.contains(session.id)
             return SessionDisplayModel(
                 id: session.id,
                 agentName: Self.agentName(session.agent),

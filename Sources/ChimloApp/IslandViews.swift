@@ -435,7 +435,10 @@ private struct SessionListView: View {
                 .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 6) {
+                    // The local registry is capped at 40 sessions. Eager rows
+                    // avoid SwiftUI's macOS lazy-placement livelock when a
+                    // dynamically sized permission row is scrolled after reveal.
+                    VStack(spacing: 6) {
                         if let decision = model.pendingDecision {
                             LiveDecisionView(decision: decision, model: model)
                         }

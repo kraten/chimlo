@@ -11,7 +11,11 @@ enum ChimloChecks {
             return
         }
         var suite = CheckSuite()
-        if CommandLine.arguments.contains("--layout-only") {
+        if CommandLine.arguments.contains("--session-list-layout-only") {
+            suite.runSessionListLayoutOnly()
+        } else if CommandLine.arguments.contains("--session-visibility-only") {
+            suite.runSessionVisibilityOnly()
+        } else if CommandLine.arguments.contains("--layout-only") {
             suite.runLayoutOnly()
         } else {
             await suite.run()
@@ -33,10 +37,12 @@ private struct CheckSuite {
 
     mutating func run() async {
         notchLayout()
+        sessionListLayout()
         systemFeedback()
         hookPrivacyMapping()
         transcriptMetadataPrivacy()
         modelDisplayNames()
+        sessionVisibility()
         sessionArchiveVisibility()
         codexHookConfiguration()
         claudeHookConfiguration()
@@ -52,6 +58,45 @@ private struct CheckSuite {
     mutating func runLayoutOnly() {
         notchLayout()
         systemFeedback()
+    }
+
+    mutating func runSessionVisibilityOnly() {
+        sessionVisibility()
+    }
+
+    mutating func runSessionListLayoutOnly() {
+        sessionListLayout()
+    }
+
+    mutating func sessionListLayout() {
+        let focusedHeight = SessionListLayout.contentHeight(
+            displayedRowHeights: [420],
+            hasSessions: true,
+            hasDecision: false,
+            showsDisclosureControl: true,
+            isDisclosureContextActive: true
+        )
+        let revealedHeight = SessionListLayout.contentHeight(
+            displayedRowHeights: [420, 70, 70, 70, 70],
+            hasSessions: true,
+            hasDecision: false,
+            showsDisclosureControl: false,
+            isDisclosureContextActive: true
+        )
+        expect(
+            revealedHeight == focusedHeight,
+            "revealing hidden sessions keeps the scroll viewport stable"
+        )
+        expect(
+            SessionListLayout.contentHeight(
+                displayedRowHeights: [70, 70],
+                hasSessions: true,
+                hasDecision: false,
+                showsDisclosureControl: false,
+                isDisclosureContextActive: true
+            ) == 158,
+            "a short revealed list does not reserve empty disclosure space"
+        )
     }
 
     mutating func systemFeedback() {
@@ -357,6 +402,45 @@ private struct CheckSuite {
                 agent: .codex
             ) == "5.3 Codex Spark",
             "Codex compound model families remain readable"
+        )
+    }
+
+    mutating func sessionVisibility() {
+        expect(
+            !SessionVisibilityPolicy.shouldDisplay(
+                title: "chimlo",
+                titleKind: .workspace,
+                isDemo: false,
+                hasActionableRequest: false
+            ),
+            "workspace fallback is not shown as a session title"
+        )
+        expect(
+            SessionVisibilityPolicy.shouldDisplay(
+                title: "Fix model display names",
+                titleKind: .task,
+                isDemo: false,
+                hasActionableRequest: false
+            ),
+            "provider task titles remain visible"
+        )
+        expect(
+            SessionVisibilityPolicy.shouldDisplay(
+                title: "Fix the tiny lighthouse",
+                titleKind: .workspace,
+                isDemo: true,
+                hasActionableRequest: false
+            ),
+            "the titled onboarding demo remains visible"
+        )
+        expect(
+            SessionVisibilityPolicy.shouldDisplay(
+                title: "chimlo",
+                titleKind: .workspace,
+                isDemo: false,
+                hasActionableRequest: true
+            ),
+            "an untitled session stays visible while owner action is required"
         )
     }
 
