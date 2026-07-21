@@ -553,15 +553,13 @@ final class LocalSessionRuntime {
         activeProcessIDs: Set<String>,
         now: Date = .now
     ) -> Bool {
-        if activeProcessIDs.contains(candidate.id) { return true }
-        let maximumAge: TimeInterval
-        switch candidate.phase {
-        case .working, .waitingForApproval, .waitingForAnswer:
-            maximumAge = 30 * 60
-        case .completed, .failed:
-            maximumAge = 5 * 60
-        }
-        return candidate.updatedAt >= now.addingTimeInterval(-maximumAge)
+        SessionDiscoveryRetentionPolicy.shouldRetain(
+            phase: candidate.phase,
+            updatedAt: candidate.updatedAt,
+            hasActiveProcess: activeProcessIDs.contains(candidate.id),
+            hasLastResponse: candidate.latestAgentResponse != nil,
+            now: now
+        )
     }
 }
 

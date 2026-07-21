@@ -11,7 +11,9 @@ enum ChimloChecks {
             return
         }
         var suite = CheckSuite()
-        if CommandLine.arguments.contains("--session-list-layout-only") {
+        if CommandLine.arguments.contains("--session-discovery-retention-only") {
+            suite.runSessionDiscoveryRetentionOnly()
+        } else if CommandLine.arguments.contains("--session-list-layout-only") {
             suite.runSessionListLayoutOnly()
         } else if CommandLine.arguments.contains("--session-visibility-only") {
             suite.runSessionVisibilityOnly()
@@ -43,6 +45,7 @@ private struct CheckSuite {
         transcriptMetadataPrivacy()
         modelDisplayNames()
         sessionRelativeTime()
+        sessionDiscoveryRetention()
         sessionVisibility()
         sessionArchiveVisibility()
         codexHookConfiguration()
@@ -67,6 +70,10 @@ private struct CheckSuite {
 
     mutating func runSessionListLayoutOnly() {
         sessionListLayout()
+    }
+
+    mutating func runSessionDiscoveryRetentionOnly() {
+        sessionDiscoveryRetention()
     }
 
     mutating func sessionListLayout() {
@@ -141,6 +148,30 @@ private struct CheckSuite {
                 now: now
             ) == "Session activity updated 2 hours ago",
             "session age exposes a spoken accessibility label"
+        )
+    }
+
+    mutating func sessionDiscoveryRetention() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        expect(
+            SessionDiscoveryRetentionPolicy.shouldRetain(
+                phase: .completed,
+                updatedAt: now.addingTimeInterval(-24 * 60),
+                hasActiveProcess: false,
+                hasLastResponse: true,
+                now: now
+            ),
+            "a completed session keeps its last response after twenty-four minutes"
+        )
+        expect(
+            !SessionDiscoveryRetentionPolicy.shouldRetain(
+                phase: .completed,
+                updatedAt: now.addingTimeInterval(-24 * 60),
+                hasActiveProcess: false,
+                hasLastResponse: false,
+                now: now
+            ),
+            "a metadata-only completion retains the short cleanup window"
         )
     }
 

@@ -90,10 +90,8 @@ struct SessionDisplayModel: Identifiable, Equatable, Sendable {
 
         let promptFont = NSFont.systemFont(ofSize: 11, weight: .medium)
         let promptLabelFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        let doneFont = NSFont.systemFont(ofSize: 10, weight: .semibold)
         let promptFixedWidth = ("You:" as NSString).size(withAttributes: [.font: promptLabelFont]).width
-            + ("Done" as NSString).size(withAttributes: [.font: doneFont]).width
-            + 26
+            + 6
         let promptTextWidth = max(1, responseTextWidth - promptFixedWidth)
         let promptLineHeight = ceil(promptFont.ascender - promptFont.descender + promptFont.leading)
         let promptLineCount = measuredLineCount(

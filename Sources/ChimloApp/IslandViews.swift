@@ -791,12 +791,6 @@ struct SessionRow: View {
                     .foregroundStyle(ChimloTheme.quietPaper)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 8)
-
-                Text("Done")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(ChimloTheme.mutedPaper)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
