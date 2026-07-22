@@ -171,6 +171,8 @@ enum OnboardingStep: Equatable, Sendable {
 final class ApplicationModel: ObservableObject {
     @Published private(set) var sessions: [SessionDisplayModel] = []
     @Published var panelMode: PanelMode = .compact
+    @Published private(set) var fullScreenMediaPresentationMode:
+        FullScreenMediaPresentationMode = .normal
     @Published private(set) var onboardingStep: OnboardingStep = .welcome
     @Published private(set) var accessibility = AccessibilityEnvironment.current
     @Published private(set) var serverState: LocalServerState = .stopped
@@ -250,8 +252,12 @@ final class ApplicationModel: ObservableObject {
     private var lastClaudeUsageProbeAttemptAt: Date?
     private var capacityRefreshFailures: Set<CapacityProvider> = []
 
+    var presentedPanelMode: PanelMode {
+        fullScreenMediaPresentationMode == .systemFeedbackOnly ? .compact : panelMode
+    }
+
     var panelSize: CGSize {
-        switch panelMode {
+        switch presentedPanelMode {
         case .compact:
             return CGSize(width: islandLayout.compactWidth, height: islandLayout.compactHeight)
         case .sessions:
@@ -527,6 +533,11 @@ final class ApplicationModel: ObservableObject {
     func openPanel() {
         cancelCollapse()
         panelMode = .sessions
+    }
+
+    func updateFullScreenMediaPresentationMode(_ mode: FullScreenMediaPresentationMode) {
+        guard mode != fullScreenMediaPresentationMode else { return }
+        fullScreenMediaPresentationMode = mode
     }
 
     func collapsePanelFromOutsideClick() {

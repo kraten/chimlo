@@ -3,6 +3,11 @@ import Testing
 
 @Suite("System feedback")
 struct SystemFeedbackTests {
+    @Test("System feedback remains visible long enough to read")
+    func holdsForTwoSeconds() {
+        #expect(SystemFeedbackPolicy.holdMilliseconds >= 2_000)
+    }
+
     @Test("Values are normalized for display and accessibility")
     func presentationNormalizesValues() {
         let loud = SystemFeedbackPresentation(kind: .outputVolume, value: 1.4)

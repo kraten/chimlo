@@ -10,66 +10,80 @@ struct IslandRootView: View {
     let openSettings: () -> Void
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                islandSurface
+        GeometryReader { hostGeometry in
+            GeometryReader { islandGeometry in
+                ZStack(alignment: .top) {
+                    islandSurface
 
-                switch model.panelMode {
-                case .compact:
-                    CompactIslandView(model: model, media: model.mediaPlayback)
-                        .padding(.horizontal, model.islandLayout.hasCameraHousing ? 0 : 13)
-                        .padding(.vertical, model.islandLayout.hasCameraHousing ? 0 : 5)
-                case .sessions:
-                    if model.islandLayout.hasCameraHousing {
-                        ExpandedStatusBand(model: model, openSettings: openSettings)
-                    }
-                    if model.showsUsageDetails {
-                        UsageDashboardView(model: model)
+                    switch model.presentedPanelMode {
+                    case .compact:
+                        CompactIslandView(model: model, media: model.mediaPlayback)
+                            .padding(.horizontal, model.islandLayout.hasCameraHousing ? 0 : 13)
+                            .padding(.vertical, model.islandLayout.hasCameraHousing ? 0 : 5)
+                    case .sessions:
+                        if model.islandLayout.hasCameraHousing {
+                            ExpandedStatusBand(model: model, openSettings: openSettings)
+                        }
+                        if model.showsUsageDetails {
+                            UsageDashboardView(model: model)
+                                .padding(.horizontal, expandedHorizontalGutter)
+                                .padding(.top, model.islandLayout.expandedContentTopInset + 2)
+                        }
+                        SessionListView(model: model)
                             .padding(.horizontal, expandedHorizontalGutter)
-                            .padding(.top, model.islandLayout.expandedContentTopInset + 2)
-                    }
-                    SessionListView(model: model)
-                        .padding(.horizontal, expandedHorizontalGutter)
-                        .padding(
-                            .top,
-                            model.islandLayout.expandedContentTopInset
-                                + 2
-                                + (model.showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
-                        )
-                        .padding(.bottom, 10)
-                        .frame(width: model.panelSize.width)
-                        .frame(width: geometry.size.width, alignment: .center)
-                case .onboarding:
-                    OnboardingView(model: model)
-                        .padding(.horizontal, 18)
-                        .padding(.top, model.islandLayout.expandedContentTopInset + 12)
-                        .padding(.bottom, 18)
-                    if model.islandLayout.hasCameraHousing,
-                       let feedback = model.systemFeedback {
-                        SystemFeedbackNotchBand(
-                            feedback: feedback,
-                            cameraWidth: model.islandLayout.cameraHousingWidth,
-                            reduceMotion: model.accessibility.reduceMotion
-                        )
-                        .frame(height: model.islandLayout.expandedContentTopInset)
+                            .padding(
+                                .top,
+                                model.islandLayout.expandedContentTopInset
+                                    + 2
+                                    + (model.showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
+                            )
+                            .padding(.bottom, 10)
+                            .frame(width: model.panelSize.width)
+                            .frame(width: islandGeometry.size.width, alignment: .center)
+                    case .onboarding:
+                        OnboardingView(model: model)
+                            .padding(.horizontal, 18)
+                            .padding(.top, model.islandLayout.expandedContentTopInset + 12)
+                            .padding(.bottom, 18)
+                        if model.islandLayout.hasCameraHousing,
+                           let feedback = model.systemFeedback {
+                            SystemFeedbackNotchBand(
+                                feedback: feedback,
+                                cameraWidth: model.islandLayout.cameraHousingWidth,
+                                reduceMotion: model.accessibility.reduceMotion
+                            )
+                            .frame(height: model.islandLayout.expandedContentTopInset)
+                        }
                     }
                 }
+                // Follow the live SwiftUI bounds while the visible island grows
+                // inside the fixed AppKit host. WindowServer now sees one stable
+                // frame across Spaces instead of an in-flight window resize.
+                .frame(width: islandGeometry.size.width, height: islandGeometry.size.height)
+                .clipped()
             }
-            // Follow AppKit's live, intermediate bounds while the NSPanel grows
-            // and shrinks. Using model.panelSize here jumps to the final width
-            // before the window animation and makes the content open to one side.
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+            .frame(width: model.panelSize.width, height: model.panelSize.height)
+            .animation(islandResizeAnimation, value: model.panelSize)
+            .frame(
+                width: hostGeometry.size.width,
+                height: hostGeometry.size.height,
+                alignment: .top
+            )
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Chimlo activity island")
     }
 
+    private var islandResizeAnimation: Animation? {
+        guard !model.accessibility.reduceMotion else { return nil }
+        return .timingCurve(0.32, 0.72, 0, 1, duration: 0.24)
+    }
+
     @ViewBuilder
     private var islandSurface: some View {
         let surface = ChimloTheme.surface(increasedContrast: model.accessibility.increaseContrast)
-        if model.islandLayout.hasCameraHousing, model.panelMode == .compact {
+        if model.islandLayout.hasCameraHousing, model.presentedPanelMode == .compact {
             CompactNotchIslandShape()
                 .fill(surface)
         } else if model.islandLayout.hasCameraHousing {
@@ -77,8 +91,8 @@ struct IslandRootView: View {
             .fill(surface)
         } else {
             ChamferedIslandShape(
-                shoulder: model.panelMode == .compact ? 9 : 12,
-                lowerCut: model.panelMode == .compact ? 9 : 14
+                shoulder: model.presentedPanelMode == .compact ? 9 : 12,
+                lowerCut: model.presentedPanelMode == .compact ? 9 : 14
             )
             .fill(surface)
         }
@@ -315,8 +329,14 @@ private struct CompactIslandView: View {
     var body: some View {
         Group {
             if let feedback = model.systemFeedback {
-                openPanelButton {
+                if model.fullScreenMediaPresentationMode == .systemFeedbackOnly {
                     SystemFeedbackCompactContent(feedback: feedback, model: model)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(feedback.accessibilityDescription)
+                } else {
+                    openPanelButton {
+                        SystemFeedbackCompactContent(feedback: feedback, model: model)
+                    }
                 }
             } else if model.shouldShowCompactMedia, media.presentation != nil {
                 CompactMusicPlayerView(model: model, media: media)
@@ -345,6 +365,9 @@ private struct CompactIslandView: View {
 
     private var compactAccessibilityLabel: String {
         if let feedback = model.systemFeedback {
+            if model.fullScreenMediaPresentationMode == .systemFeedbackOnly {
+                return feedback.accessibilityDescription
+            }
             return "Open Chimlo. \(feedback.accessibilityDescription)."
         }
         if model.shouldShowCompactMedia, let presentation = media.presentation {

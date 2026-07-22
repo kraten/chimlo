@@ -12,60 +12,45 @@ enum LiveWindowTransitionCheck {
             fail("no visible Chimlo island window was found")
         }
 
-        print("READY initial=\(initial.bounds) expectedCenter=\(display.cameraCenter)")
+        print("READY hover Chimlo open and closed; host=\(initial.bounds)")
         fflush(stdout)
 
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(30))
+        let deadline = clock.now.advanced(by: .seconds(10))
         var frames: [WindowSnapshot] = [initial]
-        var transitionStarted = false
 
         while clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(8))
-            guard let snapshot = chimloWindow(on: display.bounds) else { continue }
-            if abs(snapshot.bounds.width - initial.bounds.width) > 0.5 {
-                transitionStarted = true
-                frames.append(snapshot)
-                break
-            }
-        }
-
-        guard transitionStarted else {
-            fail("the Chimlo window did not begin resizing within thirty seconds")
-        }
-
-        let captureEnd = clock.now.advanced(by: .milliseconds(650))
-        while clock.now < captureEnd {
             try? await Task.sleep(for: .milliseconds(8))
             if let snapshot = chimloWindow(on: display.bounds) { frames.append(snapshot) }
         }
 
-        let centerDeltas = frames.map { abs($0.bounds.midX - display.cameraCenter) }
-        let topDeltas = frames.map { abs($0.bounds.minY - display.bounds.minY) }
-        let distinctWidths = Set(frames.map { Int(($0.bounds.width * 2).rounded()) })
-        let final = frames.last?.bounds ?? initial.bounds
-        let expanded = final.width > initial.bounds.width
-        let expectedWidth: CGFloat = expanded ? display.expandedWidth : display.compactWidth
+        let centerDeltas = frames.map { abs($0.bounds.midX - initial.bounds.midX) }
+        let topDeltas = frames.map { abs($0.bounds.minY - initial.bounds.minY) }
+        let widthDeltas = frames.map { abs($0.bounds.width - initial.bounds.width) }
+        let heightDeltas = frames.map { abs($0.bounds.height - initial.bounds.height) }
 
         var failures: [String] = []
-        if centerDeltas.max() ?? .infinity > 1.5 {
-            failures.append("window center drifted by \(centerDeltas.max() ?? 0) points")
+        if abs(initial.bounds.midX - display.cameraCenter) > 1.5 {
+            failures.append("host is not centered on the camera")
         }
-        if topDeltas.max() ?? .infinity > 1.5 {
+        if abs(initial.bounds.width - display.bounds.width) > 1.5 {
+            failures.append("host does not span the display width")
+        }
+        if centerDeltas.max() ?? .infinity > 0.5 {
+            failures.append("host center changed while island content resized")
+        }
+        if topDeltas.max() ?? .infinity > 0.5 {
             failures.append("window detached from the screen edge")
         }
-        if distinctWidths.count < 4 {
-            failures.append("resize did not produce a visible multi-frame size transition")
+        if widthDeltas.max() ?? .infinity > 0.5 {
+            failures.append("host width changed while island content resized")
         }
-        if abs(final.width - expectedWidth) > 1.5 {
-            failures.append("final width \(final.width) does not match \(expectedWidth)")
+        if heightDeltas.max() ?? .infinity > 0.5 {
+            failures.append("host height changed while island content resized")
         }
 
         if failures.isEmpty {
-            print(
-                "PASS  Chimlo \(expanded ? "expanded" : "collapsed") across \(distinctWidths.count) widths "
-                    + "with max center delta \(String(format: "%.2f", centerDeltas.max() ?? 0))"
-            )
+            print("PASS  Chimlo host remained stable while the visible island resized")
         } else {
             failures.forEach { fputs("FAIL  \($0)\n", stderr) }
             exit(EXIT_FAILURE)
@@ -108,8 +93,6 @@ private struct WindowSnapshot {
 private struct NotchedDisplay {
     let bounds: CGRect
     let cameraCenter: CGFloat
-    let compactWidth: CGFloat
-    let expandedWidth: CGFloat
 
     static var current: NotchedDisplay? {
         guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }),
@@ -122,9 +105,7 @@ private struct NotchedDisplay {
         let appKitCenter = (leftArea.maxX + rightArea.minX) / 2
         return NotchedDisplay(
             bounds: bounds,
-            cameraCenter: bounds.minX + appKitCenter - screen.frame.minX,
-            compactWidth: rightArea.minX - leftArea.maxX + 64,
-            expandedWidth: screen.frame.width * 0.3
+            cameraCenter: bounds.minX + appKitCenter - screen.frame.minX
         )
     }
 }

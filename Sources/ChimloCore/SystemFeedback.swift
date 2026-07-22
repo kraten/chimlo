@@ -32,7 +32,7 @@ public struct SystemFeedbackPresentation: Equatable, Sendable {
 }
 
 public enum SystemFeedbackPolicy {
-    public static let holdMilliseconds = 1_250
+    public static let holdMilliseconds = 2_000
     public static let meterCellCount = 8
     public static let standardStep = 1.0 / 16.0
     public static let fineStep = 1.0 / 64.0
