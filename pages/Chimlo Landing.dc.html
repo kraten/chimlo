@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chimlo - macOS activity island for coding agents</title>
+<meta name="description" content="Chimlo keeps Codex and Claude Code visible in your MacBook notch, with local session activity, questions, approvals, and usage at a glance.">
+<meta name="theme-color" content="#0a0b08">
+<link rel="canonical" href="https://kraten.github.io/chimlo/">
+<link rel="icon" href="../.github/chimlo-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Chimlo">
+<meta property="og:title" content="Chimlo - macOS activity island for coding agents">
+<meta property="og:description" content="Keep Codex and Claude Code visible in your MacBook notch. Answer questions, approve actions, and check usage without leaving your flow.">
+<meta property="og:url" content="https://kraten.github.io/chimlo/">
+<meta property="og:image" content="https://kraten.github.io/chimlo/assets/social-preview.png">
+<meta property="og:image:width" content="1774">
+<meta property="og:image:height" content="887">
+<meta property="og:image:alt" content="Chimlo activity island for coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #0a0b08; color: #edefe6; font-family: 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  h1, h2, h3 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; }
+  a { color: oklch(0.83 0.16 145); text-decoration: none; }
+  a:hover { color: oklch(0.9 0.16 145); }
+  ::selection { background: oklch(0.83 0.16 145 / 0.3); color: #f4f7ee; }
+  @keyframes chBob { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-4px); } }
+  @keyframes chCaret { 0%,100%{ opacity:1; } 50%{ opacity:0; } }
+  @keyframes chFade { from{ transform:translateY(5px);} to{ transform:translateY(0);} }
+  @media (max-width: 720px) {
+    header nav > div,
+    header nav > span[style*="width:1px"] { display: none !important; }
+  }
+  @media (max-width: 520px) {
+    header nav { gap: 12px !important; padding: 13px 18px !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [style*="animation:chBob"],
+    [style*="animation:chCaret"],
+    [style*="animation:chFade"] { animation: none !important; }
+  }
+</style>
+</helmet>
+<div style="--bg:#0a0b08; --bg2:#0f110c; --panel:#090b07; --line:rgba(240,244,230,0.09); --line2:rgba(240,244,230,0.18); --ink:#edefe6; --muted:#96a08b; --dim:#5e6653; --green:oklch(0.83 0.16 145); --codex:oklch(0.68 0.15 250); --claude:oklch(0.75 0.15 55); background:var(--bg); color:var(--ink); overflow-x:hidden;">
+
+  <!-- NAV -->
+  <header style="position:sticky; top:0; z-index:50; backdrop-filter:blur(14px); background:rgba(10,11,8,0.7); border-bottom:1px solid var(--line);">
+    <nav style="max-width:1080px; margin:0 auto; padding:15px 24px; display:flex; align-items:center; gap:18px;">
+      <a href="#top" style="display:flex; align-items:center; gap:10px; color:var(--ink);">
+        <img src="../.github/chimlo-icon.png" alt="Chimlo" width="27" height="27" style="border-radius:7px; display:block;">
+        <span style="font-family:'Bricolage Grotesque'; font-weight:700; font-size:19px; letter-spacing:-0.02em;">Chimlo</span>
+      </a>
+      <span style="flex:1;"></span>
+      <div style="display:flex; align-items:center; gap:24px; font-size:14px; color:var(--muted);">
+        <a href="#features" style="color:var(--muted);">Features</a>
+        <a href="#install" style="color:var(--muted);">Install</a>
+        <a href="#faq" style="color:var(--muted);">FAQ</a>
+      </div>
+      <span style="width:1px; height:20px; background:var(--line2);"></span>
+      <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:14px; color:var(--muted);" style-hover="color:var(--ink);">GitHub ↗</a>
+      <a href="https://github.com/kraten/chimlo/releases/latest" target="_blank" rel="noopener" style="font-size:13.5px; font-weight:600; color:#08130a; background:var(--green); padding:8px 15px; border-radius:8px;" style-hover="background:oklch(0.9 0.16 145);">Download</a>
+    </nav>
+  </header>
+
+  <!-- HERO -->
+  <section id="top" style="max-width:1080px; margin:0 auto; padding:96px 24px 76px; display:flex; flex-wrap:wrap; gap:60px; align-items:center;">
+    <div style="flex:1 1 400px; min-width:300px;">
+      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:var(--green); margin-bottom:24px;">macOS 14+ · Free &amp; open source</div>
+      <h1 style="font-weight:800; font-size:clamp(46px, 6.6vw, 78px); line-height:0.98; letter-spacing:-0.035em; margin:0 0 24px;">Your coding agents, live in the notch.</h1>
+      <p style="font-size:17px; line-height:1.62; color:var(--muted); max-width:470px; margin:0 0 36px; text-wrap:pretty;">Chimlo puts Codex and Claude Code in a small control surface at the top of your Mac. Watch them work, answer their questions, and approve their moves — without leaving what you're doing.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:22px; align-items:center;">
+        <a href="https://github.com/kraten/chimlo/releases/latest" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:10px; padding:15px 24px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#08130a" aria-hidden="true"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 17.4 6.3 11.7l1.4-1.4L11 13.6V3zM5 19h14v2H5z"/></svg>
+          Download for Mac
+        </a>
+        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">Star on GitHub ↗</a>
+      </div>
+      <p style="font-family:'JetBrains Mono'; font-size:12px; color:var(--dim); margin:26px 0 0;">Apple Silicon · under 100 MB RAM · auto-updating</p>
+    </div>
+
+    <!-- PRODUCT PANEL -->
+    <div style="flex:1 1 460px; min-width:320px; position:relative; display:flex; justify-content:center;">
+      <div style="position:absolute; width:82%; height:78%; top:8%; left:9%; background:radial-gradient(circle, oklch(0.83 0.16 145 / 0.28), transparent 68%); filter:blur(56px); z-index:0;"></div>
+      <div style="position:relative; z-index:1; width:100%; max-width:520px;">
+        <div style="position:relative; background:var(--panel); border:1px solid var(--line2); border-radius:22px; box-shadow:0 40px 80px -28px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.02) inset;">
+          <div style="position:absolute; top:-1px; left:50%; transform:translateX(-50%); width:130px; height:20px; background:var(--panel); border:1px solid var(--line2); border-top:none; border-radius:0 0 13px 13px; z-index:4;"></div>
+
+          <!-- capacity header -->
+          <div style="display:flex; align-items:center; gap:16px; padding:16px 17px 13px;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="width:15px; height:15px; border-radius:4px; display:grid; place-items:center; background:oklch(0.68 0.15 250 / 0.2); color:var(--codex); font-size:9px;">◆</span>
+              <div style="display:flex; gap:2px; align-items:flex-end;">
+                <span style="width:3px; height:6px; border-radius:1px; background:var(--codex);"></span>
+                <span style="width:3px; height:8px; border-radius:1px; background:var(--codex);"></span>
+                <span style="width:3px; height:10px; border-radius:1px; background:var(--codex);"></span>
+                <span style="width:3px; height:12px; border-radius:1px; background:var(--codex);"></span>
+                <span style="width:3px; height:13px; border-radius:1px; background:oklch(0.42 0.04 250 / 0.6);"></span>
+              </div>
+              <span style="font-family:'JetBrains Mono'; font-size:11px; font-weight:600; color:var(--codex);">89%</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="width:15px; height:15px; border-radius:4px; display:grid; place-items:center; background:oklch(0.75 0.15 55 / 0.2); color:var(--claude); font-size:10px;">✳</span>
+              <div style="display:flex; gap:2px; align-items:flex-end;">
+                <span style="width:3px; height:6px; border-radius:1px; background:var(--claude);"></span>
+                <span style="width:3px; height:8px; border-radius:1px; background:var(--claude);"></span>
+                <span style="width:3px; height:10px; border-radius:1px; background:var(--claude);"></span>
+                <span style="width:3px; height:12px; border-radius:1px; background:var(--claude);"></span>
+                <span style="width:3px; height:13px; border-radius:1px; background:oklch(0.47 0.05 55 / 0.6);"></span>
+              </div>
+              <span style="font-family:'JetBrains Mono'; font-size:11px; font-weight:600; color:var(--claude);">90%</span>
+            </div>
+            <span style="flex:1;"></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="var(--muted)"/><path d="M16.5 8.5a5 5 0 010 7" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h18M3 16h18"/><circle cx="9" cy="8" r="2.3" fill="var(--muted)" stroke="none"/><circle cx="15" cy="16" r="2.3" fill="var(--muted)" stroke="none"/></svg>
+          </div>
+
+          <!-- sessions -->
+          <sc-for list="{{ sessions }}" as="row" hint-placeholder-count="4">
+            <div style="padding:13px 16px; border-top:1px solid var(--line);">
+              <div style="display:flex; align-items:flex-start; gap:11px;">
+                <div style="flex-shrink:0; margin-top:1px; animation:chBob 2.8s ease-in-out infinite;">{{ row.comp }}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:13.5px; font-weight:600; color:#eef3e8;">{{ row.title }}</span>
+                    <span style="color:var(--dim); font-size:12px;">↗</span>
+                  </div>
+                  <div style="font-family:'JetBrains Mono'; font-size:10.5px; color:var(--muted); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--dim);">You:</span> {{ row.you }}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                  <span style="font-family:'JetBrains Mono'; font-size:10px; font-weight:600; padding:3px 8px; border-radius:6px; background:{{ row.badge }}; color:{{ row.color }};">{{ row.agent }}</span>
+                  <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); padding:3px 8px; border-radius:6px; border:1px solid var(--line); white-space:nowrap;">{{ row.model }}</span>
+                  <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); padding:3px 8px; border-radius:6px; border:1px solid var(--line); white-space:nowrap;">{{ row.time }}</span>
+                </div>
+              </div>
+              <sc-if value="{{ row.active }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:11px;" key="{{ scene }}">
+                    <sc-if value="{{ isWorking }}" hint-placeholder-val="{{ true }}">
+                      <div style="background:#0d110a; border:1px solid var(--line2); border-radius:10px; padding:10px 12px; animation:chFade .4s ease both;">
+                        <div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--muted); line-height:1.6;"><span style="color:var(--codex);">Chimlo:</span> Running 93 checks<span style="width:6px; height:12px; background:var(--codex); display:inline-block; vertical-align:-2px; margin-left:3px; animation:chCaret 1s step-end infinite;"></span></div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.09 148 / 0.4); border-radius:10px; padding:10px 12px; animation:chFade .4s ease both;">
+                        <div style="font-family:'JetBrains Mono'; font-size:11px; color:#dfe6d5; line-height:1.6;"><span style="color:var(--green);">Chimlo:</span> All 93 checks passed. <span style="color:var(--green);">Ready to ship ✓</span></div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ isQuestion }}" hint-placeholder-val="{{ false }}">
+                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.13 55 / 0.4); border-radius:10px; padding:11px 12px; animation:chFade .4s ease both;">
+                        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:8px;">CHIMLO ASKS</div>
+                        <div style="font-size:12px; color:#eaf0e2; margin-bottom:9px;">Ship to production now?</div>
+                        <div style="display:flex; gap:7px;">
+                          <div style="flex:1; font-size:11px; color:#f2e6d6; padding:7px 9px; background:oklch(0.75 0.15 55 / 0.14); border:1px solid oklch(0.5 0.13 55 / 0.45); border-radius:7px; display:flex; align-items:center; gap:6px;"><kbd style="font-family:'JetBrains Mono'; font-size:9px; color:var(--claude); border:1px solid oklch(0.5 0.13 55 / 0.5); border-radius:4px; padding:1px 4px;">⌘1</kbd> Ship now</div>
+                          <div style="flex:1; font-size:11px; color:#dfe6d5; padding:7px 9px; background:#151a12; border:1px solid var(--line2); border-radius:7px; display:flex; align-items:center; gap:6px;"><kbd style="font-family:'JetBrains Mono'; font-size:9px; color:var(--muted); border:1px solid var(--line2); border-radius:4px; padding:1px 4px;">⌘2</kbd> Hold</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ isApproval }}" hint-placeholder-val="{{ false }}">
+                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.13 55 / 0.4); border-radius:10px; padding:11px 12px; animation:chFade .4s ease both;">
+                        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:8px;">⚠ PERMISSION REQUEST</div>
+                        <div style="font-size:12px; color:#eaf0e2; margin-bottom:10px;">Run <code style="font-family:'JetBrains Mono'; font-size:11px; color:var(--claude); background:var(--panel); padding:1px 5px; border-radius:4px;">git push origin main</code></div>
+                        <div style="display:flex; gap:7px;">
+                          <div style="flex:1; text-align:center; font-size:11px; color:var(--muted); padding:7px; border:1px solid var(--line2); border-radius:7px;">Deny <kbd style="font-family:'JetBrains Mono'; font-size:9px;">⌘N</kbd></div>
+                          <div style="flex:1; text-align:center; font-size:11px; font-weight:600; color:#08130a; padding:7px; background:var(--green); border-radius:7px;">Allow <kbd style="font-family:'JetBrains Mono'; font-size:9px;">⌘Y</kbd></div>
+                        </div>
+                      </div>
+                    </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; justify-content:center; gap:9px; margin-top:18px;">
+          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="4">
+            <button onClick="{{ d.go }}" title="{{ d.label }}" style="width:8px; height:8px; padding:0; border:none; cursor:pointer; border-radius:50%; background:{{ d.color }};"></button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUNS WITH -->
+  <section style="max-width:1080px; margin:0 auto; padding:0 24px;">
+    <div style="border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:26px 0; display:flex; flex-wrap:wrap; align-items:center; gap:20px 28px;">
+      <span style="font-family:'JetBrains Mono'; font-size:11px; letter-spacing:0.16em; color:var(--dim); white-space:nowrap;">WORKS WITH THE AGENTS YOU ALREADY RUN</span>
+      <span style="flex:1;"></span>
+      <div style="display:flex; flex-wrap:wrap; gap:12px;">
+        <div style="display:flex; align-items:center; gap:11px; padding:10px 16px 10px 12px; border:1px solid var(--line2); border-radius:11px; background:var(--bg2);">
+          <span style="width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:oklch(0.68 0.15 250 / 0.16); color:var(--codex); font-size:12px;">◆</span>
+          <div style="display:flex; flex-direction:column; line-height:1.2;">
+            <span style="font-size:14px; font-weight:600; color:var(--ink);">Codex</span>
+            <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">OpenAI</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:11px; padding:10px 16px 10px 12px; border:1px solid var(--line2); border-radius:11px; background:var(--bg2);">
+          <span style="width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:oklch(0.75 0.15 55 / 0.16); color:var(--claude); font-size:13px;">✳</span>
+          <div style="display:flex; flex-direction:column; line-height:1.2;">
+            <span style="font-size:14px; font-weight:600; color:var(--ink);">Claude Code</span>
+            <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">Anthropic</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:9px; padding:10px 16px; border:1px dashed var(--line2); border-radius:11px;">
+          <span style="font-family:'JetBrains Mono'; font-size:12px; color:var(--muted);">more soon</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" style="max-width:1080px; margin:0 auto; padding:100px 24px;">
+    <div style="max-width:620px; margin-bottom:48px;">
+      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">FEATURES</div>
+      <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,48px); line-height:1.04; letter-spacing:-0.025em; margin:0 0 16px;">Everything happening. One glance.</h2>
+      <p style="color:var(--muted); font-size:16px; line-height:1.6; margin:0;">Long-running agents shouldn't make you babysit a terminal. Chimlo keeps the work visible and brings the moments that need you to where you already are.</p>
+    </div>
+
+    <!-- showcase -->
+    <div style="border:1px solid var(--line2); border-radius:20px; background:var(--bg2); padding:clamp(28px,4vw,46px); display:flex; flex-wrap:wrap; gap:44px; align-items:center; margin-bottom:8px;">
+      <div style="flex:1 1 320px; min-width:280px;">
+        <div style="font-family:'JetBrains Mono'; font-size:11px; letter-spacing:0.14em; color:var(--green); margin-bottom:14px;">THE DIFFERENCE</div>
+        <h3 style="font-weight:700; font-size:clamp(24px,3vw,32px); line-height:1.1; letter-spacing:-0.02em; margin:0 0 14px;">Answer and approve without leaving your editor.</h3>
+        <p style="color:var(--muted); font-size:15px; line-height:1.65; margin:0 0 16px;">When an agent needs a decision — a question to answer or an action to approve — the island opens right where you're looking. Reply, allow it once, or allow it for the whole session.</p>
+        <p style="font-family:'JetBrains Mono'; font-size:12.5px; color:var(--dim); margin:0;">Nothing runs until you say so.</p>
+      </div>
+      <div style="flex:1 1 300px; min-width:260px; background:var(--panel); border:1px solid var(--line2); border-radius:14px; padding:18px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+          <div>{{ companionAsk }}</div>
+          <div>
+            <div style="font-size:13.5px; font-weight:600; color:#eef3e8;">Review the release build</div>
+            <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">Claude · waiting for you</div>
+          </div>
+        </div>
+        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:9px;">CHIMLO ASKS</div>
+        <div style="font-size:14px; color:#eaf0e2; margin-bottom:13px;">Ship to production now?</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#f2e6d6; padding:10px 12px; background:oklch(0.75 0.15 55 / 0.14); border:1px solid oklch(0.5 0.13 55 / 0.45); border-radius:9px;"><kbd style="font-family:'JetBrains Mono'; font-size:10px; color:var(--claude); border:1px solid oklch(0.5 0.13 55 / 0.5); border-radius:4px; padding:1px 5px;">⌘1</kbd> Ship it now</div>
+          <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#dfe6d5; padding:10px 12px; background:var(--bg); border:1px solid var(--line2); border-radius:9px;"><kbd style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); border:1px solid var(--line2); border-radius:4px; padding:1px 5px;">⌘2</kbd> Hold for review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- index list -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); column-gap:52px;">
+      <sc-for list="{{ features }}" as="f" hint-placeholder-count="8">
+        <div style="display:flex; gap:20px; padding:26px 0; border-top:1px solid var(--line);">
+          <span style="font-family:'JetBrains Mono'; font-size:13px; color:var(--green); flex-shrink:0; padding-top:3px;">{{ f.n }}</span>
+          <div>
+            <h3 style="font-weight:600; font-size:18px; letter-spacing:-0.01em; margin:0 0 7px; color:var(--ink);">{{ f.title }}</h3>
+            <p style="font-size:14px; line-height:1.6; color:var(--muted); margin:0;">{{ f.body }}</p>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section style="border-top:1px solid var(--line);">
+    <div style="max-width:1080px; margin:0 auto; padding:100px 24px; display:flex; flex-wrap:wrap; gap:56px; align-items:flex-start;">
+      <div style="flex:1 1 420px; min-width:300px;">
+        <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">PRIVATE BY DEFAULT</div>
+        <h2 style="font-weight:800; font-size:clamp(32px,4.8vw,56px); line-height:1.0; letter-spacing:-0.03em; margin:0;">Everything stays<br>on your Mac.</h2>
+      </div>
+      <div style="flex:1 1 340px; min-width:280px;">
+        <p style="color:var(--muted); font-size:16px; line-height:1.65; margin:0 0 24px;">Chimlo just gives your terminal a face at the top of the screen. What your agents say and do stays between you and them.</p>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <sc-for list="{{ privacy }}" as="p" hint-placeholder-count="4">
+            <div style="display:flex; gap:13px; align-items:flex-start; border-top:1px solid var(--line); padding-top:16px;">
+              <span style="color:var(--green); font-size:13px; margin-top:2px;">✓</span>
+              <span style="font-size:14.5px; line-height:1.55; color:#d6dece;">{{ p }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install" style="border-top:1px solid var(--line);">
+    <div style="max-width:1080px; margin:0 auto; padding:100px 24px; text-align:center;">
+      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">INSTALL</div>
+      <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,48px); line-height:1.04; letter-spacing:-0.025em; margin:0 0 16px;">Running in a minute.</h2>
+      <p style="color:var(--muted); font-size:16px; line-height:1.6; max-width:480px; margin:0 auto 32px;">Download the signed app and drag it to Applications. It updates itself — no accounts, no setup.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:22px; justify-content:center; align-items:center;">
+        <a href="https://github.com/kraten/chimlo/releases/latest" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:10px; padding:15px 24px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#08130a" aria-hidden="true"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 17.4 6.3 11.7l1.4-1.4L11 13.6V3zM5 19h14v2H5z"/></svg>
+          Download Chimlo.dmg
+        </a>
+        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">Build from source ↗</a>
+      </div>
+      <p style="font-family:'JetBrains Mono'; font-size:12px; color:var(--dim); margin:26px 0 0;">macOS 14+ · Apple Silicon · GPL-3.0</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" style="border-top:1px solid var(--line);">
+    <div style="max-width:820px; margin:0 auto; padding:100px 24px;">
+      <div style="margin-bottom:40px;">
+        <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">FAQ</div>
+        <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,44px); letter-spacing:-0.025em; margin:0;">Questions, answered.</h2>
+      </div>
+      <div>
+        <sc-for list="{{ faqs }}" as="q" hint-placeholder-count="6">
+          <div style="border-top:1px solid var(--line);">
+            <button onClick="{{ q.toggle }}" style="width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:22px 0; display:flex; align-items:center; gap:16px; color:var(--ink); font-family:'Space Grotesk'; font-size:16px; font-weight:500;">
+              <span style="flex:1;">{{ q.q }}</span>
+              <span style="color:var(--green); font-size:20px; font-family:'JetBrains Mono';">{{ q.sign }}</span>
+            </button>
+            <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 40px 24px 0; font-size:14.5px; line-height:1.7; color:var(--muted);">{{ q.a }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section style="border-top:1px solid var(--line);">
+    <div style="max-width:1080px; margin:0 auto; padding:92px 24px 104px; text-align:center;">
+      <div style="display:flex; justify-content:center; margin-bottom:26px;"><div style="animation:chBob 2.4s ease-in-out infinite;">{{ companionHero }}</div></div>
+      <h2 style="font-weight:800; font-size:clamp(34px,5.2vw,62px); line-height:1.0; letter-spacing:-0.03em; margin:0 0 16px;">Get back to your flow.</h2>
+      <p style="color:var(--muted); font-size:16px; line-height:1.6; max-width:440px; margin:0 auto 32px;">Free and open source, forever. Star it, run it, and let your agents keep working.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center; align-items:center;">
+        <a href="https://github.com/kraten/chimlo/releases/latest" target="_blank" rel="noopener" style="padding:15px 26px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">Download for Mac</a>
+        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">Star on GitHub ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="border-top:1px solid var(--line); background:var(--bg2);">
+    <div style="max-width:1080px; margin:0 auto; padding:40px 24px; display:flex; flex-wrap:wrap; gap:24px; align-items:center;">
+      <div style="display:flex; align-items:center; gap:11px;">
+        <img src="../.github/chimlo-icon.png" alt="Chimlo" width="44" height="44" style="border-radius:11px; display:block;">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-family:'Bricolage Grotesque'; font-weight:700; font-size:16px;">Chimlo</span>
+          <span style="font-size:11.5px; color:var(--dim);">macOS activity island for coding agents</span>
+        </div>
+      </div>
+      <span style="flex:1;"></span>
+      <div style="display:flex; flex-wrap:wrap; gap:22px; font-size:13.5px;">
+        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="color:var(--muted);">GitHub</a>
+        <a href="https://github.com/kraten/chimlo/discussions" target="_blank" rel="noopener" style="color:var(--muted);">Discussions</a>
+        <a href="https://github.com/kraten/chimlo/blob/main/Docs/ARCHITECTURE.md" target="_blank" rel="noopener" style="color:var(--muted);">Architecture</a>
+        <a href="https://github.com/kraten/chimlo/blob/main/LICENSE" target="_blank" rel="noopener" style="color:var(--muted);">GPL-3.0</a>
+      </div>
+    </div>
+    <div style="max-width:1080px; margin:0 auto; padding:0 24px 34px; font-family:'JetBrains Mono'; font-size:11px; color:var(--dim);">© 2026 Chimlo · Built by <a href="https://github.com/kraten" target="_blank" rel="noopener">kraten</a> · Product and integration names belong to their respective owners.</div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1080,&quot;height&quot;:900},&quot;autoDemo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;demoSpeed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:3.6,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:0.2,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Demo&quot;}}">
+class Component extends DCLogic {
+  state = { scene: 0, openFaq: 0 };
+
+  componentDidMount() { this._start(); }
+  componentWillUnmount() { clearInterval(this._t); }
+
+  _start() {
+    clearInterval(this._t);
+    const auto = this.props.autoDemo ?? true;
+    if (!auto) return;
+    const ms = Math.max(1500, (this.props.demoSpeed ?? 3.6) * 1000);
+    this._t = setInterval(() => {
+      this.setState(s => ({ scene: (s.scene + 1) % 4 }));
+    }, ms);
+  }
+
+  _pixel(scale, body, light) {
+    const P = [
+      "....WW.....",
+      "...WBBW....",
+      "..WBBBLW...",
+      "..WVWVVW...",
+      "..WVVVVW..W",
+      "..WBBBBW.WW",
+      ".WWBBBBWWW.",
+      "W.WBBBBW...",
+      "..WBBBBW...",
+      "..WW..W....",
+      "......WW..."
+    ];
+    const map = { W: "#f3f6ee", B: body, L: light, V: "#0b0e08" };
+    const sh = [];
+    P.forEach((row, r) => {
+      row.split("").forEach((ch, c) => {
+        if (ch === "." || ch === " ") return;
+        sh.push(`${c * scale}px ${r * scale}px 0 0 ${map[ch]}`);
+      });
+    });
+    return React.createElement("div", {
+      style: { position: "relative", width: P[0].length * scale + "px", height: P.length * scale + "px", imageRendering: "pixelated" }
+    }, React.createElement("div", {
+      style: { position: "absolute", top: 0, left: 0, width: scale + "px", height: scale + "px", boxShadow: sh.join(",") }
+    }));
+  }
+
+  _green(scale) { return this._pixel(scale, "#6cc46a", "#b7e6ab"); }
+  _orange(scale) { return this._pixel(scale, "#ef9a52", "#ffd9ad"); }
+
+  renderVals() {
+    const s = this.state.scene;
+    const set = (i) => () => { clearInterval(this._t); this.setState({ scene: i }); };
+
+    const CODEX = "var(--codex)", CLAUDE = "var(--claude)";
+    const codexBg = "oklch(0.68 0.15 250 / 0.16)", claudeBg = "oklch(0.75 0.15 55 / 0.16)";
+    const sessions = [
+      { title: "Trace the webhook timeout", you: "Can you verify the release build?", agent: "Codex", model: "5.6 Sol", time: "<1m", color: CODEX, badge: codexBg, comp: this._green(2), active: true },
+      { title: "Review the release build", you: "Please check the build and tests.", agent: "Claude", model: "Opus 4.8", time: "41m", color: CLAUDE, badge: claudeBg, comp: this._orange(2), active: false },
+      { title: "Polish the first-run tour", you: "Smooth out the onboarding flow.", agent: "Codex", model: "5.6 Sol", time: "58m", color: CODEX, badge: codexBg, comp: this._green(2), active: false },
+      { title: "README refresh complete", you: "Update the docs and examples.", agent: "Codex", model: "5.6 Sol", time: "2h", color: CODEX, badge: codexBg, comp: this._green(2), active: false }
+    ];
+
+    const dotColors = ["var(--codex)", "var(--green)", "var(--claude)", "var(--claude)"];
+    const dotLabels = ["Working", "Done", "Question", "Approval"];
+    const dots = [0, 1, 2, 3].map((i) => ({
+      go: set(i), label: dotLabels[i], color: i === s ? dotColors[i] : "var(--line2)"
+    }));
+
+    const features = [
+      { n: "01", title: "Every session in one place", body: "See what Codex and Claude Code are up to — working, waiting, or done — without hunting through terminal tabs." },
+      { n: "02", title: "Usage at a glance", body: "Your remaining Codex and Claude capacity, right in the island. It updates on its own." },
+      { n: "03", title: "Jump to the right terminal", body: "Click a session and land on its exact tab and pane — iTerm2, Ghostty, WezTerm and more." },
+      { n: "04", title: "Native and featherlight", body: "A real Mac app, not Electron. Under 100 MB of RAM, and it never steals focus." },
+      { n: "05", title: "A useful notch between tasks", body: "When nothing's running, it handles media, volume and brightness on the same little surface." },
+      { n: "06", title: "Pixel companions", body: "Little characters make idle, working, waiting, done and failed states obvious at a glance." }
+    ];
+
+    const privacy = [
+      "No cloud, no accounts, no sign-in — ever.",
+      "Your prompts and transcripts never leave your Mac.",
+      "The terminal stays in charge: a timeout never counts as a yes."
+    ];
+
+    const faqData = [
+      { q: "Is Chimlo really free?", a: "Yes — free and open source under GPL-3.0. No subscriptions, no license keys, nothing locked away." },
+      { q: "Which agents does it work with?", a: "Codex and Claude Code, running side by side in one island. It's open source, so more can follow." },
+      { q: "Can I answer and approve without switching to the terminal?", a: "Yes. When an agent asks a question or needs permission, the island opens with the choices right there. Pick one and it goes straight back to the session." },
+      { q: "Does my data leave my Mac?", a: "No. Chimlo talks to your tools locally. Nothing is sent to a server, and there's no telemetry." },
+      { q: "Does it work without a notch?", a: "Yes. On notched Macs it lives in the notch; on everything else it's a small floating bar at the top of the screen." },
+      { q: "How do I install it?", a: "Download the signed .dmg and drag it to Applications — it updates itself. Want to build it yourself? Everything's on GitHub." }
+    ];
+    const faqs = faqData.map((f, i) => ({
+      q: f.q, a: f.a,
+      open: this.state.openFaq === i,
+      sign: this.state.openFaq === i ? "–" : "+",
+      toggle: () => this.setState(st => ({ openFaq: st.openFaq === i ? -1 : i }))
+    }));
+
+    return {
+      scene: s,
+      isWorking: s === 0, isDone: s === 1, isQuestion: s === 2, isApproval: s === 3,
+      sessions,
+      companionAsk: this._orange(3),
+      companionHero: this._green(6),
+      dots, features, privacy, faqs
+    };
+  }
+}
+</script>
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0b08"/><rect x="30" y="28" width="40" height="44" rx="8" fill="#0b0e08" stroke="#2a3324"/><rect x="42" y="40" width="16" height="10" rx="2" fill="#74c866"/><rect x="42" y="54" width="16" height="6" rx="2" fill="#74c866"/></svg>
+</template>
+</body>
+</html>

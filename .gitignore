@@ -29,6 +29,7 @@ dist/
 *~
 .idea/
 .vscode/
+pages/.thumbnail
 
 # Environment
 .env
