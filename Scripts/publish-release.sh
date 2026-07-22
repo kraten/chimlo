@@ -5,6 +5,7 @@ SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
 TAG="${1:-}"
 ARTIFACT_ROOT="${CHIMLO_RELEASE_ARTIFACT_ROOT:-$PROJECT_DIR/dist/releases}"
+CHANGELOG_PATH="$PROJECT_DIR/CHANGELOG.md"
 
 if [[ ! "$TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' ]]; then
   print -u2 "Usage: $0 <tag-vX.Y.Z>"
@@ -38,6 +39,30 @@ for artifact in "$DMG_PATH" "$APPCAST_PATH" "$MANIFEST_PATH" "$CHECKSUM_PATH"; d
   fi
 done
 
+if [[ ! -f "$CHANGELOG_PATH" ]]; then
+  print -u2 "Missing changelog: $CHANGELOG_PATH"
+  exit 1
+fi
+
+RELEASE_VERSION="${TAG#v}"
+RELEASE_NOTES_PATH="$(/usr/bin/mktemp -t chimlo-release-notes)"
+cleanup_release_notes() {
+  rm -f "$RELEASE_NOTES_PATH"
+}
+trap cleanup_release_notes EXIT
+
+/usr/bin/awk -v heading="## [$RELEASE_VERSION]" '
+  index($0, heading) == 1 { in_release = 1; next }
+  in_release && /^## \[/ { exit }
+  in_release && /^\[[^]]+\]: / { exit }
+  in_release { print }
+' "$CHANGELOG_PATH" > "$RELEASE_NOTES_PATH"
+
+if ! /usr/bin/grep -q '[^[:space:]]' "$RELEASE_NOTES_PATH"; then
+  print -u2 "CHANGELOG.md has no release notes for $RELEASE_VERSION."
+  exit 1
+fi
+
 (
   cd "$ARTIFACT_DIR"
   /usr/bin/shasum -a 256 -c "${CHECKSUM_PATH:t}"
@@ -56,9 +81,8 @@ gh release create "$TAG" \
   "$CHECKSUM_PATH" \
   --draft \
   --verify-tag \
-  --generate-notes \
-  --title "Chimlo $TAG"
+  --notes-file "$RELEASE_NOTES_PATH" \
+  --title "Chimlo $RELEASE_VERSION"
 
 print "Uploaded the exact locally signed files to a draft GitHub release."
 print "Review the draft before publishing it."
-

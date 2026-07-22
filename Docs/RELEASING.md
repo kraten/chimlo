@@ -97,12 +97,14 @@ replacement path without creating a Git tag or GitHub release.
 
 ## Build a release
 
-Start from a clean worktree. The tag must already exist and point at the
-checked-out commit.
+Before tagging, move the release's notable changes from **Unreleased** into a
+dated version section in `CHANGELOG.md`. Commit that changelog update and start
+from a clean worktree. The tag must already exist and point at the checked-out
+commit.
 
 ```sh
-git tag v0.3.0
-make release TAG=v0.3.0 BUILD_NUMBER=3
+git tag -a v0.1.0 -m "Chimlo 0.1.0"
+make release TAG=v0.1.0 BUILD_NUMBER=1
 ```
 
 The command runs checks and tests, builds `dev.chimlo.mac`, verifies the frozen
@@ -110,19 +112,28 @@ designated requirement, makes the final DMG, generates and verifies the signed
 Sparkle appcast from that exact DMG, and records checksums and a manifest under:
 
 ```text
-dist/releases/v0.3.0/
+dist/releases/v0.1.0/
 ```
 
 Do not modify, repackage, rebuild, or re-sign anything in that directory.
 
+After the local release completes successfully, push the reviewed commit and
+its exact tag:
+
+```sh
+git push origin main
+git push origin v0.1.0
+```
+
 ## Upload the exact files
 
 ```sh
-make release-publish TAG=v0.3.0
+make release-publish TAG=v0.1.0
 ```
 
 This verifies every checksum and uploads the existing files to a draft GitHub
-release. It refuses to overwrite an existing release. Review the draft and its
+release. The matching section from `CHANGELOG.md` becomes the draft release
+notes. It refuses to overwrite an existing release. Review the notes and exact
 artifacts before publishing it.
 
 The Sparkle private EdDSA key remains in the trusted Mac's Keychain under the

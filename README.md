@@ -9,6 +9,7 @@
 <p align="center">
   <a href="https://github.com/kraten/chimlo#-install">Install</a> ·
   <a href="https://github.com/kraten/chimlo#-features">Features</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="https://github.com/kraten/chimlo#-connect-codex-and-claude-code">Connect agents</a> ·
   <a href="https://github.com/kraten/chimlo#%EF%B8%8F-architecture">Architecture</a> ·
   <a href="https://github.com/kraten/chimlo#-contributing">Contribute</a>
