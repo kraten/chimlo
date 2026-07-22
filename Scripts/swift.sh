@@ -18,6 +18,25 @@ shift
 
 SWIFT_ARGS=("$@")
 
+# Some Command Line Tools installations ship Swift Testing beside the
+# toolchain without adding that directory to SwiftPM's test search paths.
+# Supplying the installed framework explicitly keeps `make test` working with
+# both Command Line Tools and full Xcode, without vendoring another test copy.
+if [[ "$COMMAND" == "test" ]]; then
+  ACTIVE_DEVELOPER_DIR="$(/usr/bin/xcode-select -p)"
+  TESTING_FRAMEWORKS_DIR="$ACTIVE_DEVELOPER_DIR/Library/Developer/Frameworks"
+  if [[ -d "$TESTING_FRAMEWORKS_DIR/Testing.framework" ]]; then
+    SWIFT_ARGS+=(
+      -Xswiftc -F
+      -Xswiftc "$TESTING_FRAMEWORKS_DIR"
+      -Xlinker -F
+      -Xlinker "$TESTING_FRAMEWORKS_DIR"
+      -Xlinker -rpath
+      -Xlinker "$TESTING_FRAMEWORKS_DIR"
+    )
+  fi
+fi
+
 if [[ -n "${CHIMLO_SDK_PATH:-}" ]]; then
   SDKROOT="$CHIMLO_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$MODULE_CACHE" \
