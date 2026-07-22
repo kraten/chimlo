@@ -1,8 +1,4 @@
-<h1 align="center">
-  <img src=".github/chimlo-icon.png" alt="Chimlo icon" width="112" height="112">
-  <br>
-  Chimlo
-</h1>
+<h1 align="center"><img src=".github/chimlo-readme-icon.png" alt="" width="48" height="60" align="absmiddle">&nbsp;&nbsp;Chimlo</h1>
 
 <p align="center">
   <strong>The macOS activity island for coding agents.</strong>
@@ -11,11 +7,11 @@
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#features">Features</a> ·
-  <a href="#connect-codex-and-claude-code">Connect agents</a> ·
-  <a href="#architecture">Architecture</a> ·
-  <a href="#contributing">Contribute</a>
+  <a href="https://github.com/kraten/chimlo#-install">Install</a> ·
+  <a href="https://github.com/kraten/chimlo#-features">Features</a> ·
+  <a href="https://github.com/kraten/chimlo#-connect-codex-and-claude-code">Connect agents</a> ·
+  <a href="https://github.com/kraten/chimlo#%EF%B8%8F-architecture">Architecture</a> ·
+  <a href="https://github.com/kraten/chimlo#-contributing">Contribute</a>
 </p>
 
 <p align="center">
@@ -24,6 +20,10 @@
   <img src="https://img.shields.io/badge/Swift-6.0-c96b42?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.0">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/kraten/chimlo?style=flat-square&color=5f7f59" alt="GPL-3.0 license"></a>
   <a href="https://github.com/kraten/chimlo/stargazers"><img src="https://img.shields.io/github/stars/kraten/chimlo?style=flat-square&color=8b7d52" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <img src=".github/social-preview.png" alt="Chimlo showing Codex and Claude coding-agent sessions in the MacBook notch">
 </p>
 
 ---
