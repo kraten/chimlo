@@ -437,11 +437,13 @@ private struct CompactIslandView: View {
         } else if model.sessions.contains(where: { $0.mood == .failed }) {
             compactSignalText("×", color: ChimloTheme.clayText)
         } else if !model.sessions.isEmpty {
-            compactSignalText(
-                "\(min(model.sessions.count, 9))",
+            PixelText(
+                text: "\(min(model.sessions.count, 9))",
+                pixelSize: 2,
                 color: model.sessions.contains(where: { $0.mood == .working })
                     ? ChimloTheme.liveGreen
-                    : ChimloTheme.quietPaper
+                    : ChimloTheme.quietPaper,
+                spacing: 1
             )
         }
     }
