@@ -399,6 +399,7 @@ enum PixelSystemGlyphKind: Equatable {
     case speaker
     case mutedSpeaker
     case sun
+    case music
     case warning
 }
 
@@ -445,6 +446,8 @@ struct PixelSystemGlyph: View {
             "0010001/0110010/1110100/1110000/1110100/0110010/0010001"
         case .sun:
             "0010100/1001001/0111110/0011100/0111110/1001001/0010100"
+        case .music:
+            "0011110/0010010/0010010/0010010/1110111/1110111/0100010"
         case .warning:
             "0001000/0010100/0011100/0101010/0100010/1001001/1111111"
         }

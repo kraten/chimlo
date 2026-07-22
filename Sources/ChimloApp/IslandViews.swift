@@ -42,9 +42,6 @@ struct IslandRootView: View {
                             .frame(width: islandGeometry.size.width, alignment: .center)
                     case .onboarding:
                         OnboardingView(model: model)
-                            .padding(.horizontal, 18)
-                            .padding(.top, model.islandLayout.expandedContentTopInset + 12)
-                            .padding(.bottom, 18)
                         if model.islandLayout.hasCameraHousing,
                            let feedback = model.systemFeedback {
                             SystemFeedbackNotchBand(

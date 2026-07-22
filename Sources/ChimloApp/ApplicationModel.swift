@@ -279,7 +279,26 @@ final class ApplicationModel: ObservableObject {
                     + (showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
             )
         case .onboarding:
-            return CGSize(width: 416, height: islandLayout.expandedContentTopInset + 364)
+            return CGSize(
+                width: islandLayout.expandedWidth,
+                height: max(islandLayout.expandedContentTopInset, 36)
+                    + onboardingBodyHeight
+            )
+        }
+    }
+
+    var onboardingSession: SessionDisplayModel? {
+        guard let onboardingSessionID else { return nil }
+        return sessions.first { $0.id == onboardingSessionID }
+    }
+
+    private var onboardingBodyHeight: CGFloat {
+        switch onboardingStep {
+        case .welcome: 182
+        case .working: 172
+        case .permission: 208
+        case .resolving: 138
+        case .complete: 174
         }
     }
 
@@ -709,8 +728,12 @@ final class ApplicationModel: ObservableObject {
     }
 
     func finishOnboarding() {
+        onboardingTask?.cancel()
+        hideExistingDemoSessions()
+        onboardingSessionID = nil
+        onboardingEvents = []
         defaults.set(true, forKey: Keys.completedOnboarding)
-        panelMode = .sessions
+        panelMode = .compact
         if sessions.isEmpty, keepPreviewSession, case .failed = serverState {
             installPreviewSession()
         }
