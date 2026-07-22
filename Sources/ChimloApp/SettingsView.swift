@@ -133,7 +133,7 @@ private struct GeneralSettingsPane: View {
             } header: {
                 Text("Volume and brightness")
             } footer: {
-                Text("Needs Accessibility permission. macOS takes over if Chimlo cannot show a control.")
+                Text("Restart Chimlo after granting Accessibility access. Volume, brightness, and media controls activate on the next launch. macOS takes over if Chimlo cannot show a control.")
             }
 
             Section {

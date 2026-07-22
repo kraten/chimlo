@@ -60,6 +60,17 @@ struct OnboardingView: View {
             }
             .frame(maxWidth: .infinity)
 
+            HStack(alignment: .top, spacing: 7) {
+                PixelSystemGlyph(kind: .warning, color: ChimloTheme.attention, size: 12)
+                    .padding(.top, 1)
+
+                Text("Restart Chimlo after granting Accessibility access. Volume, brightness, and media controls activate on the next launch.")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(ChimloTheme.quietPaper)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+
             HStack(spacing: 12) {
                 Button("Skip tour", action: model.finishOnboarding)
                     .buttonStyle(TourTextButtonStyle())
