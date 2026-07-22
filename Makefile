@@ -1,10 +1,13 @@
-.PHONY: app build check clean dmg release release-app release-publish release-signing-freeze release-signing-identity release-signing-restore signing-check signing-identity test
+.PHONY: app build check clean dmg release release-app release-publish release-signing-freeze release-signing-identity release-signing-restore signing-check signing-identity test update-test
 
 build:
 	./Scripts/swift.sh build
 
 test:
 	./Scripts/swift.sh test
+
+update-test:
+	./Scripts/test-local-update.sh
 
 check:
 	./Scripts/swift.sh run chimlo-check

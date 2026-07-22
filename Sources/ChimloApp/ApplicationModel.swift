@@ -193,6 +193,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var updatePresentation: AppUpdatePresentation?
 
     let mediaPlayback = MediaPlaybackMonitor()
+    let isUpdateTestMode: Bool
 
     @Published var soundsEnabled: Bool {
         didSet { defaults.set(soundsEnabled, forKey: Keys.soundsEnabled) }
@@ -414,8 +415,14 @@ final class ApplicationModel: ObservableObject {
         return "setup needed"
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        isUpdateTestMode: Bool = Bundle.main.object(
+            forInfoDictionaryKey: "ChimloUpdateTestMode"
+        ) as? Bool ?? false
+    ) {
         self.defaults = defaults
+        self.isUpdateTestMode = isUpdateTestMode
         archivedSessionMarkers = Self.loadArchivedSessionMarkers(from: defaults)
         islandLayout = IslandLayout.make(
             for: IslandDisplayMetrics(
@@ -443,6 +450,12 @@ final class ApplicationModel: ObservableObject {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+
+        if isUpdateTestMode {
+            panelMode = .compact
+            updater.start()
+            return
+        }
 
         NotificationCenter.default.addObserver(
             self,

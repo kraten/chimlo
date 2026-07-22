@@ -21,14 +21,44 @@ case "$PACKAGE_VARIANT" in
     CHIMLO_CODE_SIGN_PASSWORD_FILE="${CHIMLO_CODE_SIGN_PASSWORD_FILE:-$CHIMLO_RELEASE_SIGNING_PASSWORD_FILE_DEFAULT}"
     CHIMLO_REQUIRE_STABLE_SIGNING=1
     ;;
+  update-test)
+    APP_BUNDLE_NAME="Chimlo Update Test"
+    APP_BUNDLE_IDENTIFIER="dev.chimlo.mac.update-test"
+    CHIMLO_CODE_SIGN_IDENTITY="${CHIMLO_CODE_SIGN_IDENTITY:-$CHIMLO_RELEASE_SIGNING_IDENTITY_DEFAULT}"
+    CHIMLO_CODE_SIGN_KEYCHAIN="${CHIMLO_CODE_SIGN_KEYCHAIN:-$CHIMLO_RELEASE_SIGNING_KEYCHAIN_DEFAULT}"
+    CHIMLO_CODE_SIGN_PASSWORD_FILE="${CHIMLO_CODE_SIGN_PASSWORD_FILE:-$CHIMLO_RELEASE_SIGNING_PASSWORD_FILE_DEFAULT}"
+    CHIMLO_REQUIRE_STABLE_SIGNING=1
+    ;;
   *)
     print -u2 "Unknown Chimlo package variant: $PACKAGE_VARIANT"
-    print -u2 "Expected 'development' or 'release'."
+    print -u2 "Expected 'development', 'release', or 'update-test'."
     exit 1
     ;;
 esac
 
-TARGET_APP_DIR="$PROJECT_DIR/dist/$APP_BUNDLE_NAME.app"
+if [[ -n "${CHIMLO_PACKAGE_OUTPUT_PATH:-}" ]]; then
+  if [[ "$PACKAGE_VARIANT" != "update-test" ]]; then
+    print -u2 "CHIMLO_PACKAGE_OUTPUT_PATH is reserved for the isolated update test."
+    exit 1
+  fi
+  TARGET_APP_DIR="$CHIMLO_PACKAGE_OUTPUT_PATH"
+  if [[ "$TARGET_APP_DIR" != /* ]]; then
+    TARGET_APP_DIR="$PROJECT_DIR/$TARGET_APP_DIR"
+  fi
+  if [[ "$TARGET_APP_DIR" == *"/../"* || "$TARGET_APP_DIR" == *"/.." ]]; then
+    print -u2 "The update-test output path cannot contain '..': $TARGET_APP_DIR"
+    exit 1
+  fi
+  case "$TARGET_APP_DIR" in
+    "$PROJECT_DIR/dist/update-test/"*.app) ;;
+    *)
+      print -u2 "The update-test app must stay under dist/update-test: $TARGET_APP_DIR"
+      exit 1
+      ;;
+  esac
+else
+  TARGET_APP_DIR="$PROJECT_DIR/dist/$APP_BUNDLE_NAME.app"
+fi
 
 cd "$PROJECT_DIR"
 ./Scripts/swift.sh build -c release --product ChimloApp
@@ -60,7 +90,7 @@ cp "$PROJECT_DIR/Packaging/Info.plist" "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -replace CFBundleName -string "$APP_BUNDLE_NAME" "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -replace CFBundleIdentifier -string "$APP_BUNDLE_IDENTIFIER" "$CONTENTS_DIR/Info.plist"
 
-if [[ "$PACKAGE_VARIANT" == "release" ]]; then
+if [[ "$PACKAGE_VARIANT" != "development" ]]; then
   if [[ -n "${CHIMLO_VERSION:-}" ]]; then
     /usr/bin/plutil -replace CFBundleShortVersionString \
       -string "${CHIMLO_VERSION#v}" \
@@ -71,7 +101,9 @@ if [[ "$PACKAGE_VARIANT" == "release" ]]; then
       -string "$CHIMLO_BUILD_NUMBER" \
       "$CONTENTS_DIR/Info.plist"
   fi
-else
+fi
+
+if [[ "$PACKAGE_VARIANT" == "development" ]]; then
   for sparkle_key in \
     SUFeedURL \
     SUPublicEDKey \
@@ -83,6 +115,22 @@ else
     SURequireSignedFeed; do
     /usr/bin/plutil -remove "$sparkle_key" "$CONTENTS_DIR/Info.plist" 2>/dev/null || true
   done
+fi
+
+if [[ "$PACKAGE_VARIANT" == "update-test" ]]; then
+  UPDATE_FEED_URL="${CHIMLO_UPDATE_FEED_URL:-}"
+  if [[ ! "$UPDATE_FEED_URL" =~ '^http://localhost:[0-9]+/appcast\.xml$' ]]; then
+    print -u2 "The update-test feed must be a loopback appcast URL."
+    print -u2 "Expected: http://localhost:<port>/appcast.xml"
+    exit 1
+  fi
+
+  /usr/bin/plutil -replace SUFeedURL -string "$UPDATE_FEED_URL" "$CONTENTS_DIR/Info.plist"
+  /usr/bin/plutil -replace SUEnableAutomaticChecks -bool false "$CONTENTS_DIR/Info.plist"
+  /usr/bin/plutil -insert ChimloUpdateTestMode -bool true "$CONTENTS_DIR/Info.plist"
+  /usr/bin/plutil -insert NSAppTransportSecurity \
+    -json '{"NSAllowsLocalNetworking":true}' \
+    "$CONTENTS_DIR/Info.plist"
 fi
 
 if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then

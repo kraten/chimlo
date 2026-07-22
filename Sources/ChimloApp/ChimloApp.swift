@@ -25,12 +25,19 @@ final class ChimloAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settingsCoordinator = SettingsWindowCoordinator(model: model)
+        self.settingsCoordinator = settingsCoordinator
+
+        if model.isUpdateTestMode {
+            model.start()
+            settingsCoordinator.show()
+            return
+        }
+
         let islandCoordinator = IslandWindowCoordinator(
             model: model,
             openSettings: { [weak settingsCoordinator] in settingsCoordinator?.show() }
         )
         self.islandCoordinator = islandCoordinator
-        self.settingsCoordinator = settingsCoordinator
 
         model.start()
         islandCoordinator.show()

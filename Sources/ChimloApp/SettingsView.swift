@@ -41,7 +41,12 @@ private enum SettingsAppearance {
 
 struct ChimloSettingsView: View {
     @ObservedObject var model: ApplicationModel
-    @State private var selectedTab: ChimloSettingsTab = .general
+    @State private var selectedTab: ChimloSettingsTab
+
+    init(model: ApplicationModel) {
+        self.model = model
+        _selectedTab = State(initialValue: model.isUpdateTestMode ? .about : .general)
+    }
 
     var body: some View {
         HStack(spacing: 0) {

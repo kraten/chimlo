@@ -3,10 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-APP_PATH="$PROJECT_DIR/dist/Chimlo.app"
+APP_PATH="${CHIMLO_PACKAGE_APP_PATH:-$PROJECT_DIR/dist/Chimlo.app}"
+if [[ "$APP_PATH" != /* ]]; then
+  APP_PATH="$PROJECT_DIR/$APP_PATH"
+fi
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
+ARCHIVED_APP_NAME="${APP_PATH:t}"
 
-if [[ ! -d "$APP_PATH" ]]; then
+if [[ "${APP_PATH:e:l}" != "app" || ! -d "$APP_PATH" ]]; then
   print -u2 "Missing app bundle: $APP_PATH"
   print -u2 "Run 'make release-app' before packaging the disk image."
   exit 1
@@ -45,7 +49,7 @@ cleanup_staging() {
 trap cleanup_staging EXIT
 
 mkdir -p "$VOLUME_ROOT" "${OUTPUT_PATH:h}"
-/usr/bin/ditto "$APP_PATH" "$VOLUME_ROOT/Chimlo.app"
+/usr/bin/ditto "$APP_PATH" "$VOLUME_ROOT/$ARCHIVED_APP_NAME"
 ln -s /Applications "$VOLUME_ROOT/Applications"
 
 /usr/bin/hdiutil create \
@@ -75,8 +79,8 @@ mkdir -p "$MOUNT_POINT"
   >/dev/null
 MOUNTED=1
 
-if [[ ! -d "$MOUNT_POINT/Chimlo.app" ]]; then
-  print -u2 "Disk image is missing Chimlo.app."
+if [[ ! -d "$MOUNT_POINT/$ARCHIVED_APP_NAME" ]]; then
+  print -u2 "Disk image is missing $ARCHIVED_APP_NAME."
   exit 1
 fi
 
@@ -86,7 +90,7 @@ if [[ ! -L "$MOUNT_POINT/Applications" ]] \
   exit 1
 fi
 
-/usr/bin/codesign --verify --deep --strict "$MOUNT_POINT/Chimlo.app"
+/usr/bin/codesign --verify --deep --strict "$MOUNT_POINT/$ARCHIVED_APP_NAME"
 /usr/bin/hdiutil detach "$MOUNT_POINT" >/dev/null
 MOUNTED=0
 rmdir "$MOUNT_POINT"
