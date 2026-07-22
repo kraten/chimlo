@@ -48,8 +48,45 @@ easy to reopen.
 
 ## 📦 Install
 
-Chimlo currently builds from source. You need macOS 14 or newer plus Xcode or
-the Xcode Command Line Tools with a Swift 6 toolchain.
+Chimlo requires macOS 14 or newer. The current release supports Apple silicon
+Macs.
+
+1. Download the latest `Chimlo-*.dmg` from
+   [GitHub Releases](https://github.com/kraten/chimlo/releases/latest).
+2. Open the DMG and drag **Chimlo** into **Applications**.
+3. Eject the Chimlo disk image, then open Chimlo from Applications.
+
+### First launch
+
+Chimlo is not yet notarized by Apple. If macOS blocks the first launch, open
+**System Settings > Privacy & Security**, scroll to **Security**, then click
+**Open Anyway** for Chimlo. Confirm with your Mac password when prompted.
+Apple documents this process in
+[Open a Mac app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
+
+On first launch, complete the short onboarding tour. Chimlo then automatically
+discovers supported local Codex and Claude Code sessions; no manual connection
+step is required for session activity.
+
+### Allow Accessibility permission
+
+Accessibility permission is required for Chimlo's volume and brightness
+controls and helps it recognize active fullscreen media.
+
+1. Install Chimlo in Applications and open it from there.
+2. Open **Chimlo Settings > General**.
+3. Under **Volume and brightness**, enable **Show in Chimlo** and click
+   **Allow**.
+4. In **System Settings > Privacy & Security > Accessibility**, enable
+   **Chimlo**.
+5. Return to Chimlo and click **Retry** if the status has not updated.
+
+Without this permission, agent activity remains available and macOS keeps its
+native volume and brightness controls.
+
+### Build from source
+
+You need Xcode or the Xcode Command Line Tools with a Swift 6 toolchain.
 
 ```sh
 git clone https://github.com/kraten/chimlo.git
@@ -62,10 +99,6 @@ make signing-identity
 make app
 open dist/Chimlo.app
 ```
-
-On first launch, complete the short onboarding tour and use **Settings >
-Connect** to add the agent integrations you want. macOS may also ask for
-Accessibility permission for volume and brightness feedback.
 
 <details>
 <summary>Why the local signing step matters</summary>
