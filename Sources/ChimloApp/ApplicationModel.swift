@@ -306,7 +306,7 @@ final class ApplicationModel: ObservableObject {
 
     private var onboardingBodyHeight: CGFloat {
         switch onboardingStep {
-        case .welcome: 214
+        case .welcome: 186
         case .working: 172
         case .permission: 208
         case .resolving: 138

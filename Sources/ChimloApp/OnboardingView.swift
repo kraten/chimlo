@@ -36,17 +36,19 @@ struct OnboardingView: View {
     }
 
     private var welcome: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Chimlo lives in your notch.")
-                .font(.system(size: 19, weight: .bold))
-                .tracking(-0.25)
-                .foregroundStyle(ChimloTheme.paper)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Chimlo lives in your notch.")
+                    .font(.system(size: 19, weight: .bold))
+                    .tracking(-0.25)
+                    .foregroundStyle(ChimloTheme.paper)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Text("See agents, media, system controls, and usage.")
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(ChimloTheme.quietPaper)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("See agents, media, system controls, and usage.")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(ChimloTheme.quietPaper)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             VStack(spacing: 9) {
                 HStack(spacing: 14) {
@@ -60,22 +62,21 @@ struct OnboardingView: View {
             }
             .frame(maxWidth: .infinity)
 
-            HStack(alignment: .top, spacing: 7) {
-                PixelSystemGlyph(kind: .warning, color: ChimloTheme.attention, size: 12)
-                    .padding(.top, 1)
+            HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .top, spacing: 6) {
+                    PixelSystemGlyph(kind: .warning, color: ChimloTheme.attention, size: 12)
+                        .padding(.top, 1)
 
-                Text("Restart Chimlo after granting Accessibility access. Volume, brightness, and media controls activate on the next launch.")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(ChimloTheme.quietPaper)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
+                    Text("Restart after Accessibility access for volume, brightness, and media controls.")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(ChimloTheme.quietPaper)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
 
-            HStack(spacing: 12) {
                 Button("Skip tour", action: model.finishOnboarding)
                     .buttonStyle(TourTextButtonStyle())
-
-                Spacer(minLength: 8)
 
                 Button("Run demo", action: model.beginOnboardingDemo)
                     .buttonStyle(ChimloButtonStyle(kind: .primary, compact: true))
@@ -86,7 +87,7 @@ struct OnboardingView: View {
 
     private var working: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TourStepHeader(step: "1 / 2", title: "Agent working")
+            TourStepHeader(marker: "1 / 2", title: "Agent working")
 
             demoSessionRow
 
@@ -106,7 +107,7 @@ struct OnboardingView: View {
 
     private var permission: some View {
         VStack(alignment: .leading, spacing: 9) {
-            TourStepHeader(step: "2 / 2", title: "Your call")
+            TourStepHeader(marker: "2 / 2", title: "Your call")
 
             demoSessionRow
 
@@ -153,8 +154,10 @@ struct OnboardingView: View {
     private func resolving(allowed: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             TourStepHeader(
-                step: allowed ? "APPROVED" : "DENIED",
-                title: allowed ? "Agent continues" : "Agent stopped"
+                marker: allowed ? "APPROVED" : "DENIED",
+                title: allowed ? "Agent continues" : "Agent stopped",
+                markerPosition: .trailing,
+                markerColor: allowed ? ChimloTheme.moss : ChimloTheme.clayText
             )
 
             demoSessionRow
@@ -173,8 +176,10 @@ struct OnboardingView: View {
     private func complete(allowed: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             TourStepHeader(
-                step: "DONE",
-                title: "Demo complete"
+                marker: "DONE",
+                title: "Demo complete",
+                markerPosition: .trailing,
+                markerColor: allowed ? ChimloTheme.moss : ChimloTheme.mutedPaper
             )
 
             demoSessionRow
@@ -402,19 +407,38 @@ private struct TourUsageGlyph: View {
 }
 
 private struct TourStepHeader: View {
-    let step: String
+    enum MarkerPosition {
+        case leading
+        case trailing
+    }
+
+    let marker: String
     let title: String
+    var markerPosition: MarkerPosition = .leading
+    var markerColor: Color = ChimloTheme.mutedPaper
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            PixelText(text: step, pixelSize: 1, color: ChimloTheme.mutedPaper, spacing: 1)
+            if markerPosition == .leading {
+                markerLabel
+            }
+
             Text(title)
                 .font(.system(size: 15, weight: .bold))
                 .tracking(-0.1)
                 .foregroundStyle(ChimloTheme.paper)
+
             Spacer(minLength: 0)
+
+            if markerPosition == .trailing {
+                markerLabel
+            }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var markerLabel: some View {
+        PixelText(text: marker, pixelSize: 1, color: markerColor, spacing: 1)
     }
 }
 
