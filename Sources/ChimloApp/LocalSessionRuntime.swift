@@ -204,6 +204,9 @@ final class LocalAgentProcessDiscovery: @unchecked Sendable {
 }
 
 final class LocalTranscriptDiscovery: @unchecked Sendable {
+    private static let coldStartHeadByteCount = 128 * 1_024
+    private static let coldStartTailByteCount = 2 * 1_024 * 1_024
+
     private let homeURL: URL
     private let fileManager: FileManager
     private let maximumAge: TimeInterval
@@ -222,19 +225,25 @@ final class LocalTranscriptDiscovery: @unchecked Sendable {
         self.maximumFilesPerProvider = maximumFilesPerProvider
     }
 
-    func discover(now: Date = .now) -> [SessionCandidate] {
+    func discover(
+        now: Date = .now,
+        maximumFilesPerProvider requestedLimit: Int? = nil
+    ) -> [SessionCandidate] {
         let codexRoot = homeURL.appendingPathComponent(".codex/sessions", isDirectory: true)
         let claudeRoot = homeURL.appendingPathComponent(".claude/projects", isDirectory: true)
+        let fileLimit = max(0, min(requestedLimit ?? maximumFilesPerProvider, maximumFilesPerProvider))
         let codex = discover(
             root: codexRoot,
             provider: .codex,
             now: now,
+            maximumFiles: fileLimit,
             shouldInclude: { $0.lastPathComponent.hasPrefix("rollout-") }
         )
         let claude = discover(
             root: claudeRoot,
             provider: .claude,
             now: now,
+            maximumFiles: fileLimit,
             shouldInclude: { !$0.path.contains("/subagents/") }
         )
         return newestBySessionID(codex + claude)
@@ -244,6 +253,7 @@ final class LocalTranscriptDiscovery: @unchecked Sendable {
         root: URL,
         provider: PrivacySafeSessionMetadataScanner.Provider,
         now: Date,
+        maximumFiles: Int,
         shouldInclude: (URL) -> Bool
     ) -> [SessionCandidate] {
         guard fileManager.fileExists(atPath: root.path),
@@ -267,7 +277,7 @@ final class LocalTranscriptDiscovery: @unchecked Sendable {
         }
 
         let selected = files.sorted { $0.modifiedAt > $1.modifiedAt }
-            .prefix(maximumFilesPerProvider)
+            .prefix(maximumFiles)
         return selected.compactMap { scan($0.url, provider: provider, modifiedAt: $0.modifiedAt) }
     }
 
@@ -280,31 +290,22 @@ final class LocalTranscriptDiscovery: @unchecked Sendable {
         defer { try? handle.close() }
         let key = url.path
         let fileSize = (try? handle.seekToEnd()) ?? 0
-        var cursor = cursors[key]
-            ?? TranscriptCursor(
-                provider: provider,
-                scanner: PrivacySafeSessionMetadataScanner(provider: provider)
-            )
-        if cursor.provider != provider || fileSize < cursor.offset {
+        let existingCursor = cursors[key]
+        let needsColdStart = existingCursor == nil
+            || existingCursor?.provider != provider
+            || fileSize < (existingCursor?.offset ?? 0)
+        var cursor: TranscriptCursor
+        if needsColdStart {
             cursor = TranscriptCursor(
                 provider: provider,
                 scanner: PrivacySafeSessionMetadataScanner(provider: provider)
             )
-        }
-        try? handle.seek(toOffset: cursor.offset)
-        let newline = UInt8(ascii: "\n")
-
-        while let chunk = try? handle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
-            cursor.offset += UInt64(chunk.count)
-            cursor.buffer.append(chunk)
-            while let index = cursor.buffer.firstIndex(of: newline) {
-                let line = Data(cursor.buffer.prefix(upTo: index))
-                cursor.buffer.removeSubrange(...index)
-                cursor.scanner.consume(line: line)
-            }
-            if cursor.buffer.count > PrivacySafeSessionMetadataScanner.maximumLineBytes {
-                cursor.buffer.removeAll(keepingCapacity: true)
-            }
+            scanColdStart(handle, fileSize: fileSize, cursor: &cursor)
+        } else if let existingCursor {
+            cursor = existingCursor
+            scanAppendedBytes(handle, cursor: &cursor)
+        } else {
+            return nil
         }
         let candidate = cursor.scanner.candidate(
             transcriptPath: url.path,
@@ -312,6 +313,73 @@ final class LocalTranscriptDiscovery: @unchecked Sendable {
         )
         cursors[key] = cursor
         return candidate
+    }
+
+    private func scanColdStart(
+        _ handle: FileHandle,
+        fileSize: UInt64,
+        cursor: inout TranscriptCursor
+    ) {
+        let headByteCount = Self.coldStartHeadByteCount
+        let tailByteCount = Self.coldStartTailByteCount
+        let boundedByteCount = UInt64(headByteCount + tailByteCount)
+
+        if fileSize <= boundedByteCount {
+            try? handle.seek(toOffset: 0)
+            scanAppendedBytes(handle, cursor: &cursor)
+            return
+        }
+
+        try? handle.seek(toOffset: 0)
+        if let head = try? handle.read(upToCount: headByteCount), !head.isEmpty {
+            cursor.offset = UInt64(head.count)
+            consumeCompleteLines(head, cursor: &cursor)
+            // The rest of this line lies in the intentionally skipped middle.
+            cursor.buffer.removeAll(keepingCapacity: true)
+        }
+
+        let tailOffset = fileSize - UInt64(tailByteCount)
+        try? handle.seek(toOffset: tailOffset)
+        guard var tail = try? handle.read(upToCount: tailByteCount), !tail.isEmpty else {
+            cursor.offset = fileSize
+            return
+        }
+        cursor.offset = fileSize
+
+        // The tail normally starts partway through a JSONL record. Discard
+        // only that incomplete record, then retain an incomplete final record
+        // so the next incremental read can finish it.
+        if let newline = tail.firstIndex(of: UInt8(ascii: "\n")) {
+            tail.removeSubrange(...newline)
+            consumeCompleteLines(tail, cursor: &cursor)
+        }
+    }
+
+    private func scanAppendedBytes(
+        _ handle: FileHandle,
+        cursor: inout TranscriptCursor
+    ) {
+        try? handle.seek(toOffset: cursor.offset)
+        while let chunk = try? handle.read(upToCount: 64 * 1_024), !chunk.isEmpty {
+            cursor.offset += UInt64(chunk.count)
+            consumeCompleteLines(chunk, cursor: &cursor)
+        }
+    }
+
+    private func consumeCompleteLines(
+        _ data: Data,
+        cursor: inout TranscriptCursor
+    ) {
+        cursor.buffer.append(data)
+        let newline = UInt8(ascii: "\n")
+        while let index = cursor.buffer.firstIndex(of: newline) {
+            let line = Data(cursor.buffer.prefix(upTo: index))
+            cursor.buffer.removeSubrange(...index)
+            cursor.scanner.consume(line: line)
+        }
+        if cursor.buffer.count > PrivacySafeSessionMetadataScanner.maximumLineBytes {
+            cursor.buffer.removeAll(keepingCapacity: true)
+        }
     }
 
     private func newestBySessionID(_ candidates: [SessionCandidate]) -> [SessionCandidate] {
@@ -433,25 +501,59 @@ final class LocalSessionRuntime {
         let registry = self.registry
 
         monitorTask = Task { [weak self] in
-            let initial = await Task.detached(priority: .utility) {
-                (
-                    registry.load(),
-                    transcriptDiscovery.discover(),
-                    processDiscovery.discover()
-                )
+            // The persisted registry is intentionally small and privacy-safe.
+            // Restore it before the first transcript traversal so an expensive
+            // JSONL scan cannot hold otherwise-usable session rows off screen.
+            let cache = await Task.detached(priority: .utility) {
+                registry.load()
             }.value
             guard !Task.isCancelled, let self else { return }
-            applyInitial(cache: initial.0, transcripts: initial.1, processes: initial.2)
+            applyCachedSessions(cache)
+
+            // Publish the newest transcript from each provider first. This
+            // covers the active-session cold-start case without waiting for
+            // the broader recent-history enrichment pass.
+            let processTask = Task.detached(priority: .utility) {
+                processDiscovery.discover()
+            }
+            let quickTranscripts = await Task.detached(priority: .utility) {
+                transcriptDiscovery.discover(maximumFilesPerProvider: 1)
+            }.value
+            guard !Task.isCancelled else {
+                processTask.cancel()
+                return
+            }
+            reconcileTranscripts(quickTranscripts, processes: [])
             onInitialScanCompleted?()
+
+            let processes = await processTask.value
+            guard !Task.isCancelled else { return }
+            applyProcesses(processes, enrichingWith: cache + quickTranscripts)
+
+            let transcripts = await Task.detached(priority: .utility) {
+                transcriptDiscovery.discover()
+            }.value
+            guard !Task.isCancelled else { return }
+            reconcileTranscripts(transcripts, processes: processes)
 
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(8))
                 guard !Task.isCancelled else { return }
-                let update = await Task.detached(priority: .utility) {
-                    (transcriptDiscovery.discover(), processDiscovery.discover())
+                let transcriptTask = Task.detached(priority: .utility) {
+                    transcriptDiscovery.discover()
+                }
+                let processes = await Task.detached(priority: .utility) {
+                    processDiscovery.discover()
                 }.value
-                reconcileTranscripts(update.0, processes: update.1)
-                reconcileProcesses(update.1)
+                guard !Task.isCancelled else {
+                    transcriptTask.cancel()
+                    return
+                }
+                reconcileProcesses(processes)
+
+                let transcripts = await transcriptTask.value
+                guard !Task.isCancelled else { return }
+                reconcileTranscripts(transcripts, processes: processes)
             }
         }
     }
@@ -473,30 +575,31 @@ final class LocalSessionRuntime {
         }
     }
 
-    private func applyInitial(
-        cache: [SessionCandidate],
-        transcripts: [SessionCandidate],
-        processes: [AgentProcessSnapshot]
-    ) {
-        var candidates = Dictionary(uniqueKeysWithValues: cache.map { ($0.id, $0) })
-        for candidate in transcripts {
-            if let existing = candidates[candidate.id], existing.updatedAt > candidate.updatedAt { continue }
-            candidates[candidate.id] = candidate
-        }
-
-        let activeProcessIDs = Set(processes.map { $0.candidate().id })
-        for candidate in candidates.values where isVisible(candidate, activeProcessIDs: activeProcessIDs) {
+    private func applyCachedSessions(_ candidates: [SessionCandidate]) {
+        for candidate in candidates where isVisible(candidate, activeProcessIDs: []) {
             trackedTranscriptSessionIDs.insert(candidate.id)
             missedTranscriptCounts[candidate.id] = 0
             onCandidate?(candidate)
         }
+    }
 
+    private func applyProcesses(
+        _ processes: [AgentProcessSnapshot],
+        enrichingWith candidates: [SessionCandidate]
+    ) {
+        var candidatesByID: [String: SessionCandidate] = [:]
+        for candidate in candidates {
+            if let existing = candidatesByID[candidate.id], existing.updatedAt > candidate.updatedAt {
+                continue
+            }
+            candidatesByID[candidate.id] = candidate
+        }
         for process in processes {
             let processCandidate = process.candidate()
             let id = processCandidate.id
             trackedProcessSessionIDs.insert(id)
             missedProcessCounts[id] = 0
-            if var candidate = candidates[id] {
+            if var candidate = candidatesByID[id] {
                 candidate.evidence = .process
                 candidate.jumpURL = candidate.jumpURL ?? processCandidate.jumpURL
                 candidate.projectPath = candidate.projectPath ?? processCandidate.projectPath

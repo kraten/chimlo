@@ -29,8 +29,10 @@ focus. The app runtime has three narrow adapters:
 - `CodexDesktopSessionAdapter` launches the installed Codex app-server by bundle
   identifier, synchronizes loaded plus bounded recent tasks, and listens for
   lifecycle notifications.
-- `LocalSessionRuntime` incrementally scans privacy-safe JSONL metadata, detects
-  terminal processes, reconciles liveness, and persists a small local cache.
+- `LocalSessionRuntime` restores its small privacy-safe cache, publishes the
+  newest Codex/Claude transcript first, then enriches recent history. Cold
+  transcript reads are bounded to a metadata head plus recent tail and continue
+  incrementally from EOF; terminal-process liveness remains independent.
 - `AgentIntegrationManager` installs and repairs the stable helper plus marked
   Codex and Claude observer entries after a complete preview and confirmation.
   Claude's separately marked `AskUserQuestion` and `PermissionRequest` hooks are
