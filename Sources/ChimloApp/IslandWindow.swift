@@ -176,6 +176,15 @@ final class IslandWindowCoordinator {
             .sink { [weak self] _ in self?.updateFrame(animated: true) }
             .store(in: &cancellables)
 
+        model.$showsUsageDetails
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.model.panelMode == .sessions else { return }
+                self.updateFrame(animated: true)
+            }
+            .store(in: &cancellables)
+
         model.$islandLayout
             .removeDuplicates()
             .receive(on: RunLoop.main)

@@ -23,19 +23,22 @@ struct IslandRootView: View {
                     if model.islandLayout.hasCameraHousing {
                         ExpandedStatusBand(model: model, openSettings: openSettings)
                     }
+                    if model.showsUsageDetails {
+                        UsageDashboardView(model: model)
+                            .padding(.horizontal, expandedHorizontalGutter)
+                            .padding(.top, model.islandLayout.expandedContentTopInset + 2)
+                    }
                     SessionListView(model: model)
                         .padding(.horizontal, expandedHorizontalGutter)
-                        .padding(.top, model.islandLayout.expandedContentTopInset + 2)
+                        .padding(
+                            .top,
+                            model.islandLayout.expandedContentTopInset
+                                + 2
+                                + (model.showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
+                        )
                         .padding(.bottom, 10)
                         .frame(width: model.panelSize.width)
                         .frame(width: geometry.size.width, alignment: .center)
-                case .usage:
-                    if model.islandLayout.hasCameraHousing {
-                        ExpandedStatusBand(model: model, openSettings: openSettings)
-                    }
-                    UsageDashboardView(model: model)
-                        .padding(.horizontal, expandedHorizontalGutter)
-                        .padding(.top, model.islandLayout.expandedContentTopInset)
                 case .onboarding:
                     OnboardingView(model: model)
                         .padding(.horizontal, 18)
@@ -100,18 +103,7 @@ private struct ExpandedStatusBand: View {
                     let wingWidth = max(0, (geometry.size.width - cameraWidth) / 2)
 
                     HStack(spacing: 0) {
-                        HStack(spacing: 8) {
-                            PixelText(
-                                text: "CHIMLO",
-                                pixelSize: 1,
-                                color: ChimloTheme.quietPaper,
-                                spacing: 1
-                            )
-                            .fixedSize()
-                            .accessibilityHidden(true)
-
-                            InlineCapacityView(model: model)
-                        }
+                        InlineCapacityView(model: model)
                             .padding(.leading, expandedHorizontalGutter)
                             .frame(width: wingWidth, height: geometry.size.height, alignment: .leading)
                             .clipped()
@@ -135,20 +127,6 @@ private struct ExpandedStatusBand: View {
                             .help(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
                             .accessibilityLabel(model.soundsEnabled ? "Mute Chimlo sounds" : "Unmute Chimlo sounds")
                             .accessibilityValue(model.soundsEnabled ? "Sounds on" : "Sounds muted")
-
-                            Button(action: model.toggleUsageView) {
-                                PixelUsageGlyph(
-                                    color: model.panelMode == .usage
-                                        ? ChimloTheme.paper
-                                        : ChimloTheme.quietPaper,
-                                    size: 12
-                                )
-                            }
-                            .buttonStyle(ExpandedControlButtonStyle(color: .white))
-                            .help(model.panelMode == .usage ? "Show sessions" : "Show usage limits")
-                            .accessibilityLabel(
-                                model.panelMode == .usage ? "Show sessions" : "Show usage limits"
-                            )
 
                             Button(action: openSettings) {
                                 Image(systemName: "gearshape.fill")
@@ -420,7 +398,14 @@ private struct CompactIslandView: View {
                     height: model.islandLayout.compactHeight
                 )
 
-            compactTrailingSignal
+            ZStack {
+                // Keep this wing in the layout even when there is no count,
+                // warning, or owner-interaction signal to draw. EmptyView does
+                // not retain its frame, which otherwise shifts the avatar by
+                // half of the missing 32-point wing toward the camera housing.
+                Color.clear
+                compactTrailingSignal
+            }
                 .frame(
                     width: model.islandLayout.activityWingWidth,
                     height: model.islandLayout.compactHeight,
@@ -470,39 +455,129 @@ private struct InlineCapacityView: View {
     @ObservedObject var model: ApplicationModel
 
     var body: some View {
-        let provider = model.selectedCapacityProvider
-        let reading = model.primaryCapacityReading(for: provider)
+        let codex = model.capacityReading(provider: .codex, kind: .weekly)
+        let claude = model.capacityReading(provider: .claude, kind: .weekly)
+        let help = capacityDisclosureHelp(
+            codexReading: codex,
+            claudeReading: claude,
+            isExpanded: model.showsUsageDetails
+        )
 
-        Button(action: model.toggleSelectedCapacityProvider) {
+        Button(action: model.toggleUsageDetails) {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 5) {
-                    ProviderLogoView(provider: provider, size: 12)
-                    PixelCapacityGauge(reading: reading, provider: provider, segmentWidth: 4)
-                    capacityPercentage(reading, provider: provider)
-                }
-
-                HStack(spacing: 5) {
-                    ProviderLogoView(provider: provider, size: 12)
-                    capacityPercentage(reading, provider: provider)
-                }
+                providerPair(
+                    codex: codex,
+                    claude: claude,
+                    logoSize: 11,
+                    segmentWidth: 3,
+                    segmentCount: 5,
+                    percentageSize: 10,
+                    percentageWidth: 32,
+                    providerSpacing: 8
+                )
+                providerPair(
+                    codex: codex,
+                    claude: claude,
+                    logoSize: 9,
+                    segmentWidth: 2.5,
+                    segmentCount: 4,
+                    percentageSize: 9,
+                    percentageWidth: 27,
+                    providerSpacing: 6
+                )
             }
             .frame(height: 26)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(capacityIndicatorHelp(provider: provider, reading: reading))
-        .accessibilityLabel(capacityIndicatorHelp(provider: provider, reading: reading))
+        .buttonStyle(CapacityDisclosureButtonStyle())
+        .help(help)
+        .accessibilityLabel(help)
+        .accessibilityValue(model.showsUsageDetails ? "Expanded" : "Collapsed")
+    }
+
+    private func providerPair(
+        codex: CapacityReading,
+        claude: CapacityReading,
+        logoSize: CGFloat,
+        segmentWidth: CGFloat,
+        segmentCount: Int,
+        percentageSize: CGFloat,
+        percentageWidth: CGFloat,
+        providerSpacing: CGFloat
+    ) -> some View {
+        HStack(spacing: providerSpacing) {
+            providerIndicator(
+                provider: .codex,
+                reading: codex,
+                logoSize: logoSize,
+                segmentWidth: segmentWidth,
+                segmentCount: segmentCount,
+                percentageSize: percentageSize,
+                percentageWidth: percentageWidth
+            )
+            providerIndicator(
+                provider: .claude,
+                reading: claude,
+                logoSize: logoSize,
+                segmentWidth: segmentWidth,
+                segmentCount: segmentCount,
+                percentageSize: percentageSize,
+                percentageWidth: percentageWidth
+            )
+        }
+    }
+
+    private func providerIndicator(
+        provider: CapacityProvider,
+        reading: CapacityReading,
+        logoSize: CGFloat,
+        segmentWidth: CGFloat,
+        segmentCount: Int,
+        percentageSize: CGFloat,
+        percentageWidth: CGFloat
+    ) -> some View {
+        HStack(spacing: 4) {
+            ProviderLogoView(provider: provider, size: logoSize)
+            HStack(spacing: 2) {
+                PixelCapacityGauge(
+                    reading: reading,
+                    provider: provider,
+                    segmentWidth: segmentWidth,
+                    segmentHeight: 7,
+                    segmentCount: segmentCount,
+                    segmentSpacing: 1
+                )
+                capacityPercentage(
+                    reading,
+                    provider: provider,
+                    fontSize: percentageSize,
+                    width: percentageWidth
+                )
+            }
+        }
     }
 
     private func capacityPercentage(
         _ reading: CapacityReading,
-        provider: CapacityProvider
+        provider: CapacityProvider,
+        fontSize: CGFloat,
+        width: CGFloat
     ) -> some View {
         Text(capacityPercentageText(reading))
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
             .foregroundStyle(capacityColor(reading, provider: provider))
             .monospacedDigit()
-            .frame(width: 36, alignment: .trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .allowsTightening(true)
+            .frame(width: width, alignment: .leading)
+    }
+}
+
+private struct CapacityDisclosureButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.58 : 1)
     }
 }
 
@@ -510,12 +585,23 @@ private struct UsageDashboardView: View {
     @ObservedObject var model: ApplicationModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        let panelShape = ChamferedIslandShape(shoulder: 6, lowerCut: 6)
+
+        HStack(alignment: .top, spacing: 16) {
             UsageProviderBlock(
                 provider: .codex,
                 readings: [("7d", model.capacityReading(provider: .codex, kind: .weekly))],
                 now: model.capacityClock
             )
+
+            DottedVLine()
+                .stroke(
+                    ChimloTheme.mutedPaper.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 1, dash: [2, 3])
+                )
+                .frame(width: 1, height: 52)
+                .frame(maxHeight: .infinity, alignment: .center)
+
             UsageProviderBlock(
                 provider: .claude,
                 readings: [
@@ -525,9 +611,27 @@ private struct UsageDashboardView: View {
                 now: model.capacityClock
             )
         }
-        .padding(.top, 9)
-        .padding(.bottom, 11)
-        .frame(maxWidth: .infinity, minHeight: CapacityLayout.usageContentHeight, alignment: .top)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity)
+        .frame(height: CapacityLayout.detailsHeight)
+        .background(
+            panelShape.fill(
+                ChimloTheme.raisedSurface(increasedContrast: model.accessibility.increaseContrast)
+            )
+        )
+        .overlay(
+            panelShape.stroke(ChimloTheme.selectedInk.opacity(0.72), lineWidth: 1)
+        )
+    }
+}
+
+private struct DottedVLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        return path
     }
 }
 
@@ -537,61 +641,142 @@ private struct UsageProviderBlock: View {
     let now: Date
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 7) {
-                ProviderLogoView(provider: provider, size: 13)
-                Text(provider == .codex ? "Codex" : "Claude")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChimloTheme.paper)
-                Spacer()
-                if let updatedAt = readings.compactMap({ $0.1.lastUpdatedAt }).max() {
-                    Text("updated \(compactAge(since: updatedAt, now: now))")
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(ChimloTheme.mutedPaper)
-                        .help("Last updated \(exactTimestamp(updatedAt))")
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(providerColor)
+                    .frame(width: 4, height: 4)
+
+                PixelText(text: providerName, pixelSize: 1, color: providerColor, spacing: 1)
             }
 
-            ForEach(Array(readings.enumerated()), id: \.offset) { _, item in
-                UsageWindowRow(
-                    label: item.0,
-                    provider: provider,
-                    reading: item.1,
-                    now: now
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(readings.enumerated()), id: \.offset) { _, item in
+                    UsageLimitBlock(
+                        label: item.0,
+                        provider: provider,
+                        reading: item.1,
+                        now: now
+                    )
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var providerName: String {
+        provider == .codex ? "CODEX" : "CLAUDE"
+    }
+
+    private var providerColor: Color {
+        provider == .codex ? ChimloTheme.providerBlue : ChimloTheme.providerOrange
     }
 }
 
-private struct UsageWindowRow: View {
+private struct UsageLimitBlock: View {
     let label: String
     let provider: CapacityProvider
     let reading: CapacityReading
     let now: Date
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(ChimloTheme.quietPaper)
-                .frame(width: 20, alignment: .leading)
-            PixelCapacityGauge(reading: reading, provider: provider, segmentWidth: 9)
-            Text(capacityPercentageText(reading))
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(capacityColor(reading, provider: provider))
-                .monospacedDigit()
-                .frame(width: 38, alignment: .trailing)
-            Text(resetText(reading, now: now))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(reading.window == nil ? ChimloTheme.mutedPaper : ChimloTheme.quietPaper)
-                .monospacedDigit()
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        Group {
+            if provider == .codex {
+                VStack(alignment: .leading, spacing: 3) {
+                    capacityRow
+                    paceRow
+                }
+            } else {
+                capacityRow
+            }
         }
-        .frame(height: 18)
         .help(rowHelp(label: label, provider: provider, reading: reading))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(rowHelp(label: label, provider: provider, reading: reading))
+    }
+
+    // LABEL · gauge · PERCENT · RESET — label sits on the left, the reset
+    // countdown is pinned inline on the right (dropped first when space is tight).
+    private var capacityRow: some View {
+        ViewThatFits(in: .horizontal) {
+            mainRowContent(includesReset: true)
+            mainRowContent(includesReset: false)
+        }
+        .frame(height: 16, alignment: .leading)
+    }
+
+    private func mainRowContent(includesReset: Bool) -> some View {
+        HStack(spacing: 5) {
+            rowLabel(label)
+
+            gauge(usedOverride: nil, colorOverride: nil)
+
+            percentText(
+                capacityUsedText(reading),
+                color: capacityColor(reading, provider: provider)
+            )
+
+            if includesReset, let reset = resetDuration(reading, now: now) {
+                trailingText(reset)
+            }
+        }
+    }
+
+    // Codex-only: how far through the weekly window you are, so you can read
+    // your used percentage against the pace you are burning it at.
+    @ViewBuilder private var paceRow: some View {
+        if let pace = paceFraction(reading, now: now) {
+            let percent = Int((pace * 100).rounded())
+            HStack(spacing: 5) {
+                rowLabel("PACE")
+
+                gauge(usedOverride: pace * 100, colorOverride: ChimloTheme.mutedPaper)
+
+                percentText("\(percent)%", color: ChimloTheme.quietPaper)
+
+                trailingText("OF 7D")
+            }
+            .frame(height: 16, alignment: .leading)
+            .help("Codex weekly pace: \(percent) percent of the window elapsed.")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Codex weekly pace: \(percent) percent of the window elapsed.")
+        }
+    }
+
+    // Fixed column so gauges line up across rows (Codex must fit "PACE") and a
+    // deliberate gap sits between the window label and the bar.
+    private var labelColumnWidth: CGFloat {
+        provider == .codex ? 26 : 15
+    }
+
+    private func rowLabel(_ text: String) -> some View {
+        PixelText(text: text, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+            .frame(width: labelColumnWidth, alignment: .leading)
+    }
+
+    private func gauge(usedOverride: Double?, colorOverride: Color?) -> some View {
+        PixelCapacityGauge(
+            reading: reading,
+            provider: provider,
+            segmentWidth: 5,
+            segmentHeight: 8,
+            segmentCount: 10,
+            usedOverride: usedOverride,
+            colorOverride: colorOverride
+        )
+    }
+
+    private func percentText(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(color)
+            .monospacedDigit()
+            .frame(minWidth: 34, alignment: .leading)
+            .padding(.leading, 3)
+    }
+
+    private func trailingText(_ text: String) -> some View {
+        PixelText(text: text, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
     }
 }
 
@@ -599,25 +784,42 @@ private struct PixelCapacityGauge: View {
     let reading: CapacityReading
     let provider: CapacityProvider
     var segmentWidth: CGFloat = 5
+    var segmentHeight: CGFloat = 7
+    var segmentCount = 5
+    var segmentSpacing: CGFloat = 2
+    // When set, the gauge fills by this used-percentage (0...100) in the given
+    // color instead of deriving from the reading. Used by the codex pace row.
+    var usedOverride: Double?
+    var colorOverride: Color?
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<5, id: \.self) { index in
+        HStack(spacing: segmentSpacing) {
+            ForEach(0..<segmentCount, id: \.self) { index in
                 Rectangle()
                     .fill(index < filledSegments ? fillColor : ChimloTheme.mutedPaper.opacity(0.24))
-                    .frame(width: segmentWidth, height: 7)
+                    .frame(width: segmentWidth, height: segmentHeight)
             }
         }
         .accessibilityHidden(true)
     }
 
+    // The bar fills as capacity is consumed: a full bar means fully used.
     private var filledSegments: Int {
-        guard let remaining = reading.remainingPercentage, remaining > 0 else { return 0 }
-        return min(5, max(1, Int(ceil(remaining / 20))))
+        let used: Double
+        if let usedOverride {
+            used = usedOverride
+        } else if let reading = reading.usedPercentage {
+            used = reading
+        } else {
+            return 0
+        }
+        guard used > 0 else { return 0 }
+        let percentagePerSegment = 100 / Double(segmentCount)
+        return min(segmentCount, max(1, Int(ceil(used / percentagePerSegment))))
     }
 
     private var fillColor: Color {
-        capacityColor(reading, provider: provider)
+        colorOverride ?? capacityColor(reading, provider: provider)
     }
 }
 
@@ -668,6 +870,28 @@ private func capacityPercentageText(_ reading: CapacityReading) -> String {
     return "\(prefix)\(Int(remaining.rounded()))%"
 }
 
+// The dashboard bars fill as capacity is consumed, so the paired label shows
+// the used percentage rather than the remaining one.
+private func capacityUsedText(_ reading: CapacityReading) -> String {
+    guard let used = reading.usedPercentage else { return "—%" }
+    let prefix = reading.isApproximate ? "~" : ""
+    return "\(prefix)\(Int(used.rounded()))%"
+}
+
+// Fraction (0...1) of the window that has elapsed — the "pace" you are burning
+// the limit at, independent of how much has actually been used.
+private func paceFraction(_ reading: CapacityReading, now: Date) -> Double? {
+    guard let window = reading.window, let reset = window.resetsAt else { return nil }
+    let duration: TimeInterval
+    switch window.kind {
+    case .weekly: duration = 7 * 24 * 60 * 60
+    case .session: duration = 5 * 60 * 60
+    }
+    guard duration > 0 else { return nil }
+    let elapsed = duration - reset.timeIntervalSince(now)
+    return min(1, max(0, elapsed / duration))
+}
+
 private func capacityColor(_ reading: CapacityReading, provider: CapacityProvider) -> Color {
     guard reading.remainingPercentage != nil else { return ChimloTheme.mutedPaper }
     if reading.isExhausted { return ChimloTheme.clayText }
@@ -675,20 +899,29 @@ private func capacityColor(_ reading: CapacityReading, provider: CapacityProvide
     return provider == .codex ? ChimloTheme.providerBlue : ChimloTheme.providerOrange
 }
 
-private func capacityIndicatorHelp(provider: CapacityProvider, reading: CapacityReading) -> String {
-    let name = provider == .codex ? "Codex" : "Claude"
-    let window = provider == .codex ? "weekly" : "session"
-    guard let remaining = reading.remainingPercentage else {
-        return "\(name) \(window) usage unavailable. Click to show the other provider."
+private func capacityDisclosureHelp(
+    codexReading: CapacityReading,
+    claudeReading: CapacityReading,
+    isExpanded: Bool
+) -> String {
+    let action = isExpanded ? "Hide all usage limits." : "Show all usage limits."
+    let readings: [(String, CapacityReading)] = [
+        ("Codex", codexReading),
+        ("Claude", claudeReading),
+    ]
+    let summaries = readings.map { provider, reading in
+        guard let remaining = reading.remainingPercentage else {
+            return "\(provider) weekly usage unavailable."
+        }
+        let qualifier = reading.isApproximate ? "approximately " : ""
+        return "\(provider) weekly capacity: \(qualifier)\(Int(remaining.rounded())) percent remaining."
     }
-    let qualifier = reading.isApproximate ? "approximately " : ""
-    return "\(name) \(window) capacity: \(qualifier)\(Int(remaining.rounded())) percent remaining. Click to show the other provider."
+    return "\(summaries.joined(separator: " ")) \(action)"
 }
 
-private func resetText(_ reading: CapacityReading, now: Date) -> String {
-    guard let window = reading.window else { return "unavailable" }
-    guard let reset = window.resetsAt else { return "reset unknown" }
-    return "in \(compactDuration(until: reset, now: now))"
+private func resetDuration(_ reading: CapacityReading, now: Date) -> String? {
+    guard let window = reading.window, let reset = window.resetsAt else { return nil }
+    return compactDuration(until: reset, now: now).uppercased()
 }
 
 private func rowHelp(
@@ -716,15 +949,6 @@ private func compactDuration(until date: Date, now: Date) -> String {
     if days > 0 { return "\(days)d \(hours)h" }
     if hours > 0 { return "\(hours)h \(minutes)m" }
     return "\(minutes)m"
-}
-
-private func compactAge(since date: Date, now: Date) -> String {
-    let minutes = max(0, Int(now.timeIntervalSince(date) / 60))
-    if minutes < 1 { return "now" }
-    if minutes < 60 { return "\(minutes)m ago" }
-    let hours = minutes / 60
-    if hours < 24 { return "\(hours)h ago" }
-    return "\(hours / 24)d ago"
 }
 
 private func exactTimestamp(_ date: Date) -> String {

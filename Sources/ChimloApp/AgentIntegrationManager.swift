@@ -241,6 +241,40 @@ struct AgentIntegrationManager {
         )
     }
 
+    /// Adds or repairs the capacity bridge for Claude integrations that were
+    /// connected before the bridge existed. The current status-line command is
+    /// retained as Chimlo's delegate, so another app keeps receiving the same
+    /// Claude payload after the upgrade.
+    @discardableResult
+    func upgradeClaudeCapacityBridgeIfConnected(
+        fileManager: FileManager = .default
+    ) throws -> Bool {
+        _ = try prepareStableHelper(fileManager: fileManager)
+        let existing = try configurationData(for: .claude, fileManager: fileManager)
+        guard let plan = try ClaudeStatusLineConfiguration.upgradingConnectedInstallation(
+            existingData: existing,
+            helperPath: stableHelperURL.path,
+            wrapperPath: claudeStatusLineWrapperURL.path
+        ) else {
+            return false
+        }
+
+        try prepareClaudeStatusLineScripts(
+            originalCommand: try ClaudeStatusLineConfiguration.originalCommand(in: plan.data),
+            fileManager: fileManager
+        )
+        if plan.changed {
+            try writeConfiguration(
+                plan.data,
+                to: claudeSettingsURL,
+                existingData: existing,
+                provider: .claude,
+                fileManager: fileManager
+            )
+        }
+        return true
+    }
+
     func disconnect(_ provider: AgentProvider, fileManager: FileManager = .default) throws {
         let destination = configurationURL(for: provider)
         guard fileManager.fileExists(atPath: destination.path) else {

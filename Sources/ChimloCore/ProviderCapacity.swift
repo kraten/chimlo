@@ -153,7 +153,8 @@ public enum ProviderCapacityParser {
         observedAt: Date
     ) -> CapacityWindowSnapshot? {
         guard let object,
-              let usedPercentage = number(object["used_percentage"]) else {
+              let usedPercentage = number(object["used_percentage"])
+                ?? number(object["utilization"]) else {
             return nil
         }
         return CapacityWindowSnapshot(

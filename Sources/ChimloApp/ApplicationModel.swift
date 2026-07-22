@@ -156,7 +156,6 @@ struct SessionQuestionPresentation: Identifiable, Equatable, Sendable {
 enum PanelMode: Equatable, Sendable {
     case compact
     case sessions
-    case usage
     case onboarding
 }
 
@@ -187,12 +186,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var systemFeedbackState: SystemFeedbackEngineState = .disabled
     @Published private(set) var capacitySnapshots: [CapacityProvider: ProviderCapacitySnapshot] = [:]
     @Published private(set) var capacityClock = Date.now
-
-    @Published var selectedCapacityProvider: CapacityProvider {
-        didSet {
-            defaults.set(selectedCapacityProvider.rawValue, forKey: Keys.selectedCapacityProvider)
-        }
-    }
+    @Published private(set) var showsUsageDetails = false
 
     let mediaPlayback = MediaPlaybackMonitor()
 
@@ -271,12 +265,9 @@ final class ApplicationModel: ObservableObject {
             )
             return CGSize(
                 width: islandLayout.expandedWidth,
-                height: islandLayout.expandedContentTopInset + contentHeight
-            )
-        case .usage:
-            return CGSize(
-                width: islandLayout.expandedWidth,
-                height: islandLayout.expandedContentTopInset + CapacityLayout.usageContentHeight
+                height: islandLayout.expandedContentTopInset
+                    + contentHeight
+                    + (showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
             )
         case .onboarding:
             return CGSize(width: 416, height: islandLayout.expandedContentTopInset + 364)
@@ -414,9 +405,6 @@ final class ApplicationModel: ObservableObject {
         soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         keepPreviewSession = defaults.object(forKey: Keys.keepPreviewSession) as? Bool ?? true
         replacesSystemFeedback = defaults.object(forKey: Keys.replacesSystemFeedback) as? Bool ?? true
-        selectedCapacityProvider = defaults.string(forKey: Keys.selectedCapacityProvider)
-            .flatMap(CapacityProvider.init(rawValue:))
-            ?? .codex
         for provider in CapacityProvider.allCases {
             if let snapshot = try? ProviderCapacityFile.load(from: Self.capacityCacheURL(for: provider)) {
                 capacitySnapshots[provider] = snapshot
@@ -484,6 +472,7 @@ final class ApplicationModel: ObservableObject {
         )
         do {
             _ = try integrationManager.prepareStableHelper()
+            try integrationManager.upgradeClaudeCapacityBridgeIfConnected()
         } catch {
             codexConnectionState = .unavailable(error.localizedDescription)
             claudeConnectionState = .unavailable(error.localizedDescription)
@@ -537,9 +526,10 @@ final class ApplicationModel: ObservableObject {
     }
 
     func collapsePanelFromOutsideClick() {
-        guard panelMode == .sessions || panelMode == .usage else { return }
+        guard panelMode == .sessions else { return }
         cancelCollapse()
         pointerInsideIsland = false
+        showsUsageDetails = false
         panelMode = .compact
     }
 
@@ -559,7 +549,7 @@ final class ApplicationModel: ObservableObject {
     ) {
         guard hasStarted, IslandCollapsePolicy.shouldCollapse(
             pointerInside: pointerInsideIsland,
-            isSessionPanel: panelMode == .sessions || panelMode == .usage,
+            isSessionPanel: panelMode == .sessions,
             hasBlockingDecision: pendingDecision != nil
                 || !sessionPermissions.isEmpty
                 || !sessionQuestions.isEmpty
@@ -570,11 +560,12 @@ final class ApplicationModel: ObservableObject {
             guard !Task.isCancelled, let self, hasStarted,
                   IslandCollapsePolicy.shouldCollapse(
                     pointerInside: pointerInsideIsland,
-                    isSessionPanel: panelMode == .sessions || panelMode == .usage,
+                    isSessionPanel: panelMode == .sessions,
                     hasBlockingDecision: pendingDecision != nil
                         || !sessionPermissions.isEmpty
                         || !sessionQuestions.isEmpty
                   ) else { return }
+            showsUsageDetails = false
             panelMode = .compact
             collapseTask = nil
         }
@@ -585,13 +576,10 @@ final class ApplicationModel: ObservableObject {
         collapseTask = nil
     }
 
-    func toggleSelectedCapacityProvider() {
-        selectedCapacityProvider = selectedCapacityProvider == .codex ? .claude : .codex
-    }
-
-    func toggleUsageView() {
+    func toggleUsageDetails() {
+        guard panelMode == .sessions else { return }
         cancelCollapse()
-        panelMode = panelMode == .usage ? .sessions : .usage
+        showsUsageDetails.toggle()
     }
 
     func capacityReading(
@@ -725,6 +713,7 @@ final class ApplicationModel: ObservableObject {
         hideExistingDemoSessions()
         onboardingSessionID = nil
         onboardingEvents = []
+        showsUsageDetails = false
         panelMode = .onboarding
         onboardingStep = .welcome
     }
@@ -996,6 +985,7 @@ final class ApplicationModel: ObservableObject {
            (session.pendingRequest != nil || session.phase == .failed),
            panelMode != .onboarding {
             cancelCollapse()
+            showsUsageDetails = false
             panelMode = .sessions
             scheduleCollapseAfterHover()
         }
@@ -1420,6 +1410,7 @@ final class ApplicationModel: ObservableObject {
             showsAllSessionsDuringOwnerInteraction = false
             pendingDecision = request
             decisionContinuation = continuation
+            showsUsageDetails = false
             panelMode = .sessions
             scheduleDecisionExpiry(for: request)
         }
@@ -1451,6 +1442,7 @@ final class ApplicationModel: ObservableObject {
             permissionContinuations[request.id] = continuation
             sessionPermissions[request.sessionID] = SessionPermissionPresentation(request: request)
             presentPermissionEvent(for: request)
+            showsUsageDetails = false
             panelMode = .sessions
             schedulePermissionExpiry(for: request)
         }
@@ -1568,6 +1560,7 @@ final class ApplicationModel: ObservableObject {
             questionContinuations[request.id] = continuation
             publishQuestion(flow)
             presentQuestionEvent(for: flow)
+            showsUsageDetails = false
             panelMode = .sessions
             scheduleQuestionExpiry(for: request)
         }
@@ -1812,7 +1805,6 @@ final class ApplicationModel: ObservableObject {
         static let keepPreviewSession = "chimlo.preview.keepSession"
         static let replacesSystemFeedback = "chimlo.systemFeedback.replacesNative"
         static let archivedSessions = "chimlo.sessions.archived"
-        static let selectedCapacityProvider = "chimlo.capacity.selectedProvider"
     }
 
     private struct QuestionFlow {

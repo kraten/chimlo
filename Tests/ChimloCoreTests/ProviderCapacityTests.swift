@@ -37,6 +37,17 @@ struct ProviderCapacityTests {
         #expect(snapshot.window(.weekly)?.remainingPercentage == 33)
     }
 
+    @Test("Claude utilization payload produces session and weekly windows")
+    func parsesClaudeUtilizationWindows() throws {
+        let data = Data(#"{"rate_limits":{"five_hour":{"utilization":36,"resets_at":"2026-07-22T07:39:59.633009+00:00"},"seven_day":{"utilization":4,"resets_at":"2026-07-27T13:59:59.633030+00:00"}}}"#.utf8)
+        let snapshot = try #require(ProviderCapacityParser.claudeStatusLine(data))
+
+        #expect(snapshot.window(.session)?.remainingPercentage == 64)
+        #expect(snapshot.window(.weekly)?.remainingPercentage == 96)
+        #expect(snapshot.window(.session)?.resetsAt != nil)
+        #expect(snapshot.window(.weekly)?.resetsAt != nil)
+    }
+
     @Test("Missing capacity is unavailable rather than zero")
     func missingDataIsUnavailable() {
         #expect(ProviderCapacityParser.codexAppServer(["rateLimits": [:]]) == nil)

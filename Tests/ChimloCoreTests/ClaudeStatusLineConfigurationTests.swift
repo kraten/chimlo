@@ -45,4 +45,73 @@ struct ClaudeStatusLineConfigurationTests {
         #expect(root["statusLine"] == nil)
         #expect(root["theme"] as? String == "dark")
     }
+
+    @Test("An existing Claude connection gains the capacity bridge")
+    func upgradesConnectedInstallation() throws {
+        let helperPath = "/Users/me/Library/Application Support/Chimlo/bin/chimlo"
+        let existing = Data(
+            #"{"statusLine":{"type":"command","command":"/Users/me/.vibe-island/bin/vibe-island-statusline"}}"#.utf8
+        )
+        let connected = try ClaudeHookConfiguration.merging(
+            existingData: existing,
+            helperPath: helperPath
+        ).data
+
+        let plan = try #require(try ClaudeStatusLineConfiguration.upgradingConnectedInstallation(
+            existingData: connected,
+            helperPath: helperPath,
+            wrapperPath: wrapperPath
+        ))
+
+        #expect(plan.changed)
+        #expect(try ClaudeStatusLineConfiguration.installationState(
+            in: plan.data,
+            wrapperPath: wrapperPath
+        ) == .current)
+        #expect(
+            try ClaudeStatusLineConfiguration.originalCommand(in: plan.data)
+                == "/Users/me/.vibe-island/bin/vibe-island-statusline"
+        )
+    }
+
+    @Test("An unconnected Claude installation is never upgraded automatically")
+    func doesNotUpgradeDisconnectedInstallation() throws {
+        let existing = Data(
+            #"{"statusLine":{"type":"command","command":"my-status"}}"#.utf8
+        )
+
+        #expect(try ClaudeStatusLineConfiguration.upgradingConnectedInstallation(
+            existingData: existing,
+            helperPath: "/Users/me/Library/Application Support/Chimlo/bin/chimlo",
+            wrapperPath: wrapperPath
+        ) == nil)
+    }
+
+    @Test("Repair preserves a status line that replaced Chimlo's wrapper")
+    func repairPreservesExternalReplacement() throws {
+        let installed = try ClaudeStatusLineConfiguration.merging(
+            existingData: Data(
+                #"{"statusLine":{"type":"command","command":"old-status"}}"#.utf8
+            ),
+            wrapperPath: wrapperPath
+        )
+        var root = try #require(
+            JSONSerialization.jsonObject(with: installed.data) as? [String: Any]
+        )
+        root["statusLine"] = [
+            "type": "command",
+            "command": "replacement-status",
+        ]
+        let replaced = try JSONSerialization.data(withJSONObject: root)
+
+        let repaired = try ClaudeStatusLineConfiguration.merging(
+            existingData: replaced,
+            wrapperPath: wrapperPath
+        )
+
+        #expect(
+            try ClaudeStatusLineConfiguration.originalCommand(in: repaired.data)
+                == "replacement-status"
+        )
+    }
 }

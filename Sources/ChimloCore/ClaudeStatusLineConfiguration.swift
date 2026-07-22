@@ -59,13 +59,20 @@ public enum ClaudeStatusLineConfiguration {
         var root = try existingData.flatMap { $0.isEmpty ? nil : try decodeRoot($0) } ?? [:]
         let wasManaged = root[managedKey] as? Bool == true
 
-        if !wasManaged, let existingStatusLine = root["statusLine"] {
+        if let existingStatusLine = root["statusLine"] {
             guard let object = existingStatusLine as? [String: Any],
                   object["type"] as? String == "command",
                   object["command"] is String else {
                 throw ClaudeStatusLineConfigurationError.malformedStatusLine
             }
-            root[originalKey] = object
+            let existingCommand = object["command"] as? String
+            if !wasManaged || existingCommand != wrapperPath {
+                root[originalKey] = object
+            }
+        } else if wasManaged {
+            // If another tool deliberately removed Chimlo's wrapper, do not
+            // resurrect the status line that predated that external change.
+            root.removeValue(forKey: originalKey)
         }
 
         var managed = (root[originalKey] as? [String: Any]) ?? [:]
@@ -79,6 +86,25 @@ public enum ClaudeStatusLineConfiguration {
             data: data,
             changed: data != existingData
         )
+    }
+
+    /// Produces the capacity-bridge migration only when Claude's Chimlo hooks
+    /// are already connected. This lets existing users receive new bridge
+    /// capabilities without treating an unrelated Claude installation as
+    /// connected or taking ownership of its status line.
+    public static func upgradingConnectedInstallation(
+        existingData: Data?,
+        helperPath: String,
+        wrapperPath: String
+    ) throws -> ClaudeStatusLineConfigurationPlan? {
+        guard let existingData, !existingData.isEmpty,
+              try ClaudeHookConfiguration.installationState(
+                in: existingData,
+                helperPath: helperPath
+              ) == .current else {
+            return nil
+        }
+        return try merging(existingData: existingData, wrapperPath: wrapperPath)
     }
 
     public static func removing(existingData: Data) throws -> ClaudeStatusLineConfigurationPlan {
