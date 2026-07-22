@@ -56,6 +56,14 @@ Macs.
 2. Open the DMG and drag **Chimlo** into **Applications**.
 3. Eject the Chimlo disk image, then open Chimlo from Applications.
 
+### Updates
+
+Release builds check for signed updates every hour. When a newer published
+release is available, Chimlo shows **Update to latest version** in the island.
+Click it once to download, verify, install, and relaunch the app. Chimlo keeps
+the same release bundle identifier, so existing app preferences remain in
+place.
+
 ### First launch
 
 Chimlo is not yet notarized by Apple. If macOS blocks the first launch, open
@@ -95,10 +103,14 @@ cd chimlo
 # One-time local signing setup
 make signing-identity
 
-# Package and open Chimlo.app
+# Package and open the separately identified local build
 make app
-open dist/Chimlo.app
+open "dist/Chimlo Dev.app"
 ```
+
+The source build is named **Chimlo Dev** and uses its own bundle identifier, so
+macOS lists it separately from a release copy of **Chimlo** in Accessibility
+settings. Each app can therefore keep its own permission toggle.
 
 <details>
 <summary>Why the local signing step matters</summary>
@@ -125,6 +137,12 @@ make check
 
 `make test` runs the Swift test suites. `make check` runs Chimlo's deterministic
 layout, protocol, and behavior checks.
+
+Public releases are built and signed locally, then the exact DMG and signed
+`appcast.xml` are uploaded to a draft GitHub release. GitHub Actions does not
+rebuild or re-sign the artifact, and the private Sparkle key stays in the
+release Mac's Keychain. Maintainers should follow the complete
+[release procedure](Docs/RELEASING.md).
 
 ## 🔌 Connect Codex and Claude Code
 
