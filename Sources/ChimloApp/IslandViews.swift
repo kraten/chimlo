@@ -439,7 +439,7 @@ private struct CompactIslandView: View {
         } else if !model.sessions.isEmpty {
             PixelText(
                 text: "\(min(model.sessions.count, 9))",
-                pixelSize: 2,
+                pixelSize: 1.5,
                 color: model.sessions.contains(where: { $0.mood == .working })
                     ? ChimloTheme.liveGreen
                     : ChimloTheme.quietPaper,

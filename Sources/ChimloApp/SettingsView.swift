@@ -4,7 +4,6 @@ import SwiftUI
 private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
     case general
     case agents
-    case accessibility
     case about
 
     var id: String { rawValue }
@@ -13,7 +12,6 @@ private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .agents: "Agents"
-        case .accessibility: "Accessibility"
         case .about: "About"
         }
     }
@@ -22,7 +20,6 @@ private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape.fill"
         case .agents: "terminal.fill"
-        case .accessibility: "accessibility"
         case .about: "info.circle.fill"
         }
     }
@@ -31,7 +28,6 @@ private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: Color(nsColor: .systemGray)
         case .agents: Color(nsColor: .systemGreen)
-        case .accessibility: Color(nsColor: .systemBlue)
         case .about: Color(nsColor: .systemGray)
         }
     }
@@ -40,10 +36,6 @@ private enum ChimloSettingsTab: String, CaseIterable, Identifiable {
 private enum SettingsAppearance {
     static var detailBackground: Color {
         Color(nsColor: .underPageBackgroundColor)
-    }
-
-    static var sidebarSeparator: Color {
-        Color(nsColor: .separatorColor)
     }
 }
 
@@ -57,22 +49,14 @@ struct ChimloSettingsView: View {
                 Section("Chimlo") {
                     sidebarRow(for: .general)
                     sidebarRow(for: .agents)
-                    sidebarRow(for: .accessibility)
-                }
-
-                Section("App") {
                     sidebarRow(for: .about)
                 }
             }
             .listStyle(.sidebar)
             .frame(width: 190)
-            .overlay(alignment: .trailing) {
-                Rectangle()
-                    .fill(SettingsAppearance.sidebarSeparator)
-                    .frame(width: 1)
-                    .ignoresSafeArea(.container, edges: .top)
-                    .accessibilityHidden(true)
-            }
+
+            Divider()
+                .ignoresSafeArea(.container, edges: .top)
 
             SettingsDetailPane(title: selectedTab.title) {
                 switch selectedTab {
@@ -80,14 +64,12 @@ struct ChimloSettingsView: View {
                     GeneralSettingsPane(model: model)
                 case .agents:
                     AgentSettingsPane(model: model)
-                case .accessibility:
-                    AccessibilitySettingsPane(model: model)
                 case .about:
                     AboutSettingsPane(model: model)
                 }
             }
         }
-        .frame(minWidth: 640, idealWidth: 680, minHeight: 440, idealHeight: 480)
+        .frame(minWidth: 640, idealWidth: 680, minHeight: 400, idealHeight: 440)
     }
 
     private func sidebarRow(for tab: ChimloSettingsTab) -> some View {
@@ -137,55 +119,29 @@ private struct GeneralSettingsPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Play event sounds", isOn: $model.soundsEnabled)
-
-                LabeledContent("Completion cue") {
-                    Button("Play") {
-                        model.previewSound()
-                    }
-                    .controlSize(.small)
-                }
+                Toggle("Play sounds", isOn: $model.soundsEnabled)
             } header: {
-                Text("Sound")
-            } footer: {
-                Text("Sounds accompany visible state changes and can be turned off at any time.")
+                Text("Sounds")
             }
 
             Section {
-                Toggle(
-                    "Show volume and brightness in Chimlo",
-                    isOn: $model.replacesSystemFeedback
-                )
+                Toggle("Show in Chimlo", isOn: $model.replacesSystemFeedback)
 
                 LabeledContent("Status") {
                     feedbackStatus
                 }
             } header: {
-                Text("System feedback")
+                Text("Volume and brightness")
             } footer: {
-                Text("Chimlo needs Accessibility access to receive the media keys. If it cannot control the current output or display safely, macOS remains in charge.")
+                Text("Needs Accessibility permission. macOS takes over if Chimlo cannot show a control.")
             }
 
             Section {
-                Toggle("Show a preview session when disconnected", isOn: $model.keepPreviewSession)
-
-                LabeledContent("First-run tour") {
-                    Button("Replay") {
-                        model.replayOnboarding()
-                    }
-                    .controlSize(.small)
-                }
-
-                LabeledContent("Preview data") {
-                    Button("Clear", role: .destructive) {
-                        model.clearPreviewData()
-                    }
-                    .controlSize(.small)
+                Button("Replay tour") {
+                    model.replayOnboarding()
                 }
             } header: {
-                Text("Preview and onboarding")
-            } footer: {
-                Text("Preview sessions are local examples. They never run commands or send data off this Mac.")
+                Text("Tour")
             }
         }
         .formStyle(.grouped)
@@ -248,24 +204,13 @@ private struct AgentSettingsPane: View {
                     disconnect: model.disconnectClaude
                 )
             } header: {
-                Text("Agent connections")
+                Text("Connections")
             } footer: {
-                Text("Connect installs Chimlo's local session bridge. Claude also gets a reversible usage bridge that retains only its 5h and 7d limits. Existing agent settings and any custom status line are restored on disconnect.")
-            }
-
-            Section("Local bridge") {
-                LabeledContent("Status", value: model.serverStatusText)
-
-                LabeledContent("Agent status") {
-                    Button("Refresh") {
-                        model.refreshAgentConnections()
-                    }
-                    .controlSize(.small)
-                }
+                Text("Connect an agent to show its local sessions and usage.")
             }
 
             Section {
-                Text("Chimlo keeps minimal session metadata on this Mac. Prompt text, assistant responses, tool input and output, and file contents are not retained.")
+                Text("Session data stays on this Mac. Chimlo does not save prompts, responses, tool data, or files.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } header: {
@@ -354,34 +299,6 @@ private struct AgentSettingsPane: View {
     }
 }
 
-private struct AccessibilitySettingsPane: View {
-    @ObservedObject var model: ApplicationModel
-
-    var body: some View {
-        Form {
-            Section {
-                accessibilityRow("Reduce Motion", enabled: model.accessibility.reduceMotion)
-                accessibilityRow("Reduce Transparency", enabled: model.accessibility.reduceTransparency)
-                accessibilityRow("Increase Contrast", enabled: model.accessibility.increaseContrast)
-            } header: {
-                Text("macOS display settings")
-            } footer: {
-                Text("Chimlo follows these system preferences automatically. Avatar animation stops when Reduce Motion is enabled.")
-            }
-        }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(SettingsAppearance.detailBackground)
-    }
-
-    private func accessibilityRow(_ title: String, enabled: Bool) -> some View {
-        LabeledContent(title) {
-            Text(enabled ? "On" : "Off")
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 private struct AboutSettingsPane: View {
     @ObservedObject var model: ApplicationModel
 
@@ -405,7 +322,7 @@ private struct AboutSettingsPane: View {
 
                 PixelText(text: "CHIMLO", pixelSize: 2, color: .primary, spacing: 1)
 
-                Text("Local agent activity, at a glance")
+                Text("Agent activity in your notch")
                     .foregroundStyle(.secondary)
 
                 Text(versionText)
@@ -417,17 +334,15 @@ private struct AboutSettingsPane: View {
 
             Form {
                 Section {
-                    LabeledContent("Data") {
-                        Text("Stays on this Mac")
+                    LabeledContent("Privacy") {
+                        Text("Local only")
                             .foregroundStyle(.secondary)
                     }
 
-                    LabeledContent("Implementation") {
+                    LabeledContent("Source") {
                         Text("Open source")
                             .foregroundStyle(.secondary)
                     }
-                } header: {
-                    Text("About Chimlo")
                 }
             }
             .formStyle(.grouped)

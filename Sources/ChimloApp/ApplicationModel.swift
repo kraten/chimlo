@@ -349,29 +349,16 @@ final class ApplicationModel: ObservableObject {
         pendingDecision != nil || sessions.contains(where: \.hasActiveOwnerInteraction)
     }
 
-    var serverStatusText: String {
-        switch serverState {
-        case .stopped:
-            "Stopped"
-        case .starting:
-            "Starting local listener"
-        case let .listening(port):
-            "Listening locally on port \(port)"
-        case .failed:
-            "Local listener unavailable"
-        }
-    }
-
     var systemFeedbackStatusText: String {
         switch systemFeedbackState {
         case .disabled:
-            return "Native macOS feedback"
+            return "Shown by macOS"
         case .starting:
-            return "Preparing Chimlo feedback"
+            return "Starting"
         case .permissionRequired:
-            return "Accessibility permission required"
+            return "Permission needed"
         case .active:
-            return "Volume and brightness appear in Chimlo"
+            return "On"
         case let .unavailable(reason):
             return reason
         }
@@ -379,26 +366,26 @@ final class ApplicationModel: ObservableObject {
 
     var codexConnectionText: String {
         guard codexAppServerConnected else {
-            return connectionText(for: .codex, state: codexConnectionState)
+            return connectionText(state: codexConnectionState)
         }
         switch codexConnectionState {
         case .checking:
-            return "Desktop live · checking observer"
+            return "Codex app connected; checking helper"
         case .disconnected:
-            return "Desktop live · observer optional"
+            return "Codex app connected; helper optional"
         case .installedAwaitingEvent:
-            return "Desktop live · observer awaiting event"
+            return "Codex app connected; waiting for activity"
         case let .receiving(date):
-            return "Desktop live · observer received \(date.formatted(.relative(presentation: .named)))"
+            return "Active \(date.formatted(.relative(presentation: .named)))"
         case .needsRepair:
-            return "Desktop live · observer needs repair"
+            return "Codex app connected; helper needs repair"
         case .unavailable:
-            return "Desktop live · observer unavailable"
+            return "Codex app connected"
         }
     }
 
     var claudeConnectionText: String {
-        connectionText(for: .claude, state: claudeConnectionState)
+        connectionText(state: claudeConnectionState)
     }
 
     var hasInstalledAgent: Bool {
@@ -747,15 +734,6 @@ final class ApplicationModel: ObservableObject {
         showsUsageDetails = false
         panelMode = .onboarding
         onboardingStep = .welcome
-    }
-
-    func clearPreviewData() {
-        hiddenSessionIDs.formUnion(demoSessionIDs)
-        syncSessionProjections()
-    }
-
-    func previewSound() {
-        chiptunePlayer.play(.success)
     }
 
     func requestSystemFeedbackPermission() {
@@ -1415,18 +1393,18 @@ final class ApplicationModel: ObservableObject {
         }
     }
 
-    private func connectionText(for provider: AgentProvider, state: AgentConnectionState) -> String {
+    private func connectionText(state: AgentConnectionState) -> String {
         switch state {
         case .checking:
-            "Checking \(provider.displayName)"
+            "Checking"
         case .disconnected:
             "Not connected"
         case .installedAwaitingEvent:
-            provider == .codex ? "Installed - confirm with /hooks" : "Installed - awaiting a session"
+            "Connected - waiting for activity"
         case let .receiving(date):
-            "Receiving - \(date.formatted(.relative(presentation: .named)))"
+            "Active \(date.formatted(.relative(presentation: .named)))"
         case .needsRepair:
-            "Observer needs repair"
+            "Repair needed"
         case let .unavailable(message):
             message
         }
