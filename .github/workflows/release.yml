@@ -1,43 +1,19 @@
-name: Release
+name: Local release policy
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
-  build-and-release:
-    name: Build & Release
-    runs-on: macos-15
-    timeout-minutes: 30
+  explain:
+    name: Explain local-only releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Show Swift version
-        run: swift --version
-
-      - name: Run tests
-        run: make test
-
-      - name: Build app bundle
-        run: make app
-
-      - name: Create zip archive
+      - name: Release policy
         run: |
-          cd dist
-          zip -r Chimlo-${{ github.ref_name }}.zip Chimlo.app
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/Chimlo-${{ github.ref_name }}.zip
-          generate_release_notes: true
-          draft: true
+          echo "Chimlo releases are built, code-signed, and Sparkle-signed locally."
+          echo "GitHub Actions must not rebuild or re-sign public artifacts."
+          echo "Use make release, then make release-publish from the trusted release Mac."
