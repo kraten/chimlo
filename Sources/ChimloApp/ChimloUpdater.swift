@@ -31,11 +31,15 @@ final class ChimloUpdater: NSObject, SPUUserDriver {
 
     func checkForUpdates() {
         shouldPresentErrors = true
+        publish(.checking)
         if !started {
             start()
-            guard started else { return }
+            guard started else {
+                shouldPresentErrors = false
+                publish(.failed)
+                return
+            }
         }
-        publish(.checking)
         updater.checkForUpdates()
     }
 
@@ -66,8 +70,11 @@ final class ChimloUpdater: NSObject, SPUUserDriver {
         _ request: SPUUpdatePermissionRequest,
         reply: @escaping (SUUpdatePermissionResponse) -> Void
     ) {
+        let automaticUpdateChecks = Bundle.main.object(
+            forInfoDictionaryKey: "SUEnableAutomaticChecks"
+        ) as? Bool ?? true
         reply(SUUpdatePermissionResponse(
-            automaticUpdateChecks: true,
+            automaticUpdateChecks: automaticUpdateChecks,
             automaticUpdateDownloading: false,
             sendSystemProfile: false
         ))
@@ -90,6 +97,7 @@ final class ChimloUpdater: NSObject, SPUUserDriver {
             return
         }
         availableUpdateReply = reply
+        shouldPresentErrors = false
         publish(.available)
     }
 
@@ -102,8 +110,9 @@ final class ChimloUpdater: NSObject, SPUUserDriver {
         acknowledgement: @escaping () -> Void
     ) {
         availableUpdateReply = nil
+        let shouldShowResult = shouldPresentErrors
         shouldPresentErrors = false
-        publish(nil)
+        publish(shouldShowResult ? .upToDate : nil)
         acknowledgement()
     }
 
@@ -112,7 +121,9 @@ final class ChimloUpdater: NSObject, SPUUserDriver {
         acknowledgement: @escaping () -> Void
     ) {
         availableUpdateReply = nil
-        publish(shouldPresentErrors ? .failed : nil)
+        let shouldShowError = shouldPresentErrors
+        shouldPresentErrors = false
+        publish(shouldShowError ? .failed : nil)
         acknowledgement()
     }
 

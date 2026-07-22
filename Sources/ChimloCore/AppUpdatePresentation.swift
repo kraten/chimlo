@@ -3,6 +3,7 @@ import Foundation
 public enum AppUpdatePhase: Equatable, Sendable {
     case available
     case checking
+    case upToDate
     case downloading(progress: Double?)
     case preparing
     case installing
@@ -24,6 +25,8 @@ public struct AppUpdatePresentation: Equatable, Sendable {
             Self.availableTitle
         case .checking:
             "Checking for update"
+        case .upToDate:
+            "Chimlo is up to date"
         case .downloading:
             "Downloading update"
         case .preparing:
@@ -35,9 +38,60 @@ public struct AppUpdatePresentation: Equatable, Sendable {
         }
     }
 
+    public var statusText: String {
+        switch phase {
+        case .available:
+            "Update available"
+        case .checking:
+            "Checking for updates…"
+        case .upToDate:
+            "Chimlo is up to date"
+        case .downloading:
+            if let progress = normalizedProgress {
+                "Downloading update: \(Int((progress * 100).rounded()))%"
+            } else {
+                "Downloading update…"
+            }
+        case .preparing:
+            "Preparing update…"
+        case .installing:
+            "Installing and relaunching…"
+        case .failed:
+            "Couldn’t check for updates"
+        }
+    }
+
+    public var actionTitle: String {
+        switch phase {
+        case .available:
+            Self.availableTitle
+        case .checking:
+            "Checking…"
+        case .upToDate:
+            "Check Again"
+        case .downloading:
+            "Downloading…"
+        case .preparing:
+            "Preparing…"
+        case .installing:
+            "Installing…"
+        case .failed:
+            "Try Again"
+        }
+    }
+
+    public var isBusy: Bool {
+        switch phase {
+        case .checking, .downloading, .preparing, .installing:
+            true
+        case .available, .upToDate, .failed:
+            false
+        }
+    }
+
     public var isActionable: Bool {
         switch phase {
-        case .available, .failed:
+        case .available, .upToDate, .failed:
             true
         case .checking, .downloading, .preparing, .installing:
             false
@@ -56,6 +110,7 @@ public enum AppUpdatePresentationPolicy {
         hasOwnerInteraction: Bool,
         isOnboarding: Bool
     ) -> Bool {
-        presentation != nil && !hasOwnerInteraction && !isOnboarding
+        guard let presentation, !hasOwnerInteraction, !isOnboarding else { return false }
+        return presentation.phase != .upToDate
     }
 }

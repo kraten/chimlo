@@ -132,11 +132,7 @@ private struct UpdateReminderView: View {
             value: isHovering
         )
         .accessibilityLabel(presentation.title)
-        .accessibilityHint(
-            presentation.isActionable
-                ? "Downloads, installs, and relaunches Chimlo. Your settings stay unchanged."
-                : "Chimlo is updating."
-        )
+        .accessibilityHint(accessibilityHint)
     }
 
     private var arrowOffset: CGFloat {
@@ -149,11 +145,24 @@ private struct UpdateReminderView: View {
         return isHovering ? ChimloTheme.paper : ChimloTheme.quietPaper
     }
 
+    private var accessibilityHint: String {
+        switch presentation.phase {
+        case .available:
+            "Downloads, installs, and relaunches Chimlo. Your settings stay unchanged."
+        case .upToDate, .failed:
+            "Checks for updates."
+        case .checking, .downloading, .preparing, .installing:
+            "Chimlo is updating."
+        }
+    }
+
     @ViewBuilder
     private var updateMark: some View {
         switch presentation.phase {
         case .available:
             PixelUpdateArrow(color: labelColor)
+        case .upToDate:
+            PixelText(text: "OK", pixelSize: 1.5, color: ChimloTheme.moss, spacing: 1)
         case .failed:
             PixelText(text: "!", pixelSize: 2, color: ChimloTheme.clayText, spacing: 1)
         case .checking, .preparing, .installing:

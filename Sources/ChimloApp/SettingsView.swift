@@ -310,13 +310,26 @@ private struct AboutSettingsPane: View {
         return "Version \(version)"
     }
 
+    private var updateButtonTitle: String {
+        model.updatePresentation?.actionTitle ?? "Check for Updates"
+    }
+
+    private var updateStatusText: String {
+        model.updatePresentation?.statusText ?? "Not checked yet"
+    }
+
+    private var updateButtonIsDisabled: Bool {
+        guard let presentation = model.updatePresentation else { return false }
+        return !presentation.isActionable
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
                 PixelAvatar(
                     mood: .idle,
                     seed: 5,
-                    size: 62,
+                    size: 48,
                     reduceMotion: model.accessibility.reduceMotion
                 )
 
@@ -343,6 +356,31 @@ private struct AboutSettingsPane: View {
                         Text("Open source")
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                Section {
+                    LabeledContent("Status") {
+                        HStack(spacing: 7) {
+                            if model.updatePresentation?.isBusy == true {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+
+                            Text(updateStatusText)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button(updateButtonTitle) {
+                        if model.updatePresentation?.phase == .available {
+                            model.installUpdate()
+                        } else {
+                            model.checkForUpdates()
+                        }
+                    }
+                    .disabled(updateButtonIsDisabled)
+                } header: {
+                    Text("Updates")
                 }
             }
             .formStyle(.grouped)

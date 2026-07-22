@@ -632,11 +632,15 @@ final class ApplicationModel: ObservableObject {
             if panelMode == .update { panelMode = .compact }
             return
         }
-        guard AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+        let shouldTakeIdlePanel = AppUpdatePresentationPolicy.shouldTakeIdlePanel(
             presentation: presentation,
             hasOwnerInteraction: hasActiveOwnerInteraction,
             isOnboarding: panelMode == .onboarding
-        ) else { return }
+        )
+        guard shouldTakeIdlePanel else {
+            if panelMode == .update { panelMode = .compact }
+            return
+        }
         cancelCollapse()
         showsUsageDetails = false
         panelMode = .update

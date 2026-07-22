@@ -73,6 +73,15 @@ private struct CheckSuite {
             "available update uses the requested notification copy"
         )
         expect(presentation.isActionable, "available update is a one-click action")
+        let completedCheck = AppUpdatePresentation(phase: .upToDate)
+        expect(
+            completedCheck.statusText == "Chimlo is up to date",
+            "a completed update check keeps a visible result"
+        )
+        expect(
+            completedCheck.actionTitle == "Check Again" && completedCheck.isActionable,
+            "an up-to-date result can be checked again"
+        )
         expect(
             AppUpdatePresentationPolicy.shouldTakeIdlePanel(
                 presentation: presentation,
@@ -88,6 +97,14 @@ private struct CheckSuite {
                 isOnboarding: false
             ),
             "owner interactions outrank update reminders"
+        )
+        expect(
+            !AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+                presentation: completedCheck,
+                hasOwnerInteraction: false,
+                isOnboarding: false
+            ),
+            "an up-to-date result stays in Settings instead of taking the island"
         )
     }
 
