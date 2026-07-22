@@ -63,6 +63,38 @@ self-signed identity may require the user to grant Accessibility permission
 again. Subsequent builds signed by this same certificate should continue to
 satisfy the frozen requirement.
 
+## Test an update without publishing
+
+Quit any earlier `Chimlo Update Test` app, then run:
+
+```sh
+make update-test
+```
+
+This builds an older test host and a newer signed DMG, generates a signed
+Sparkle appcast, serves both from loopback, and opens Settings directly to the
+About pane. Nothing is uploaded.
+
+In **About > Updates**:
+
+1. Click **Check for Updates**.
+2. Click **Update to latest version**.
+3. After the test app relaunches, confirm it shows `Version 99.0.0`.
+
+Keep the command running while the update downloads. Press Control-C afterward
+to stop the local server. The final interrupted `make` message is expected.
+
+The harness uses the separate bundle identifier
+`dev.chimlo.mac.update-test` and stores generated files under
+`dist/update-test/`. It starts only Settings and Sparkle, so it does not prompt
+for Accessibility access, modify agent integrations, use production Sparkle
+preferences, alter `dist/Chimlo.app`, or change the production feed. Each run
+resets only the update-test preference domain before launch.
+
+The same release certificate and Sparkle EdDSA key used for public artifacts
+sign both local test versions. This exercises Sparkle's signature validation and
+replacement path without creating a Git tag or GitHub release.
+
 ## Build a release
 
 Start from a clean worktree. The tag must already exist and point at the
