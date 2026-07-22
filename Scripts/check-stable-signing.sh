@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-SOURCE_APP="$PROJECT_DIR/dist/Chimlo.app"
+SOURCE_APP="$PROJECT_DIR/dist/Chimlo Dev.app"
 source "$SCRIPT_DIR/signing-common.sh"
 
 if [[ ! -d "$SOURCE_APP" ]]; then

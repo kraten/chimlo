@@ -12,6 +12,10 @@ dist/
 *.dmg
 *.pkg
 *.app
+*.p12
+*.pem
+*.key
+*.csr
 
 # macOS
 .DS_Store
