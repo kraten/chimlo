@@ -8,7 +8,7 @@ struct ClaudeStatusLineConfigurationTests {
 
     @Test("Installation preserves an existing status line")
     func preservesExistingStatusLine() throws {
-        let existing = Data(#"{"theme":"dark","statusLine":{"type":"command","command":"my-status","padding":2}}"#.utf8)
+        let existing = Data(#"{"theme":"dark","statusLine":{"type":"command","command":"my-status","padding":2,"refreshInterval":300}}"#.utf8)
         let plan = try ClaudeStatusLineConfiguration.merging(
             existingData: existing,
             wrapperPath: wrapperPath
@@ -19,13 +19,41 @@ struct ClaudeStatusLineConfigurationTests {
             wrapperPath: wrapperPath
         ) == .current)
         #expect(try ClaudeStatusLineConfiguration.originalCommand(in: plan.data) == "my-status")
+        let managedRoot = try #require(JSONSerialization.jsonObject(with: plan.data) as? [String: Any])
+        let managedStatusLine = try #require(managedRoot["statusLine"] as? [String: Any])
+        #expect(
+            (managedStatusLine["refreshInterval"] as? NSNumber)?.intValue
+                == ClaudeStatusLineConfiguration.refreshIntervalSeconds
+        )
 
         let removed = try ClaudeStatusLineConfiguration.removing(existingData: plan.data)
         let root = try #require(JSONSerialization.jsonObject(with: removed.data) as? [String: Any])
         let restored = try #require(root["statusLine"] as? [String: Any])
         #expect(restored["command"] as? String == "my-status")
         #expect((restored["padding"] as? NSNumber)?.intValue == 2)
+        #expect((restored["refreshInterval"] as? NSNumber)?.intValue == 300)
         #expect(root[ClaudeStatusLineConfiguration.managedKey] == nil)
+    }
+
+    @Test("A managed status line without periodic refresh needs repair")
+    func staleManagedInstallationNeedsRepair() throws {
+        let oldInstallation = Data(
+            #"{"_chimloStatusLineManaged":true,"statusLine":{"type":"command","command":"/Users/me/Library/Application Support/Chimlo/bin/chimlo-claude-statusline"}}"#.utf8
+        )
+
+        #expect(try ClaudeStatusLineConfiguration.installationState(
+            in: oldInstallation,
+            wrapperPath: wrapperPath
+        ) == .needsRepair)
+
+        let repaired = try ClaudeStatusLineConfiguration.merging(
+            existingData: oldInstallation,
+            wrapperPath: wrapperPath
+        )
+        #expect(try ClaudeStatusLineConfiguration.installationState(
+            in: repaired.data,
+            wrapperPath: wrapperPath
+        ) == .current)
     }
 
     @Test("Installation without a prior status line removes cleanly")
@@ -50,7 +78,7 @@ struct ClaudeStatusLineConfigurationTests {
     func upgradesConnectedInstallation() throws {
         let helperPath = "/Users/me/Library/Application Support/Chimlo/bin/chimlo"
         let existing = Data(
-            #"{"statusLine":{"type":"command","command":"/Users/me/.vibe-island/bin/vibe-island-statusline"}}"#.utf8
+            #"{"statusLine":{"type":"command","command":"/Users/me/.config/status-tools/statusline"}}"#.utf8
         )
         let connected = try ClaudeHookConfiguration.merging(
             existingData: existing,
@@ -70,7 +98,7 @@ struct ClaudeStatusLineConfigurationTests {
         ) == .current)
         #expect(
             try ClaudeStatusLineConfiguration.originalCommand(in: plan.data)
-                == "/Users/me/.vibe-island/bin/vibe-island-statusline"
+                == "/Users/me/.config/status-tools/statusline"
         )
     }
 

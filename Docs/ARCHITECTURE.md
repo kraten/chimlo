@@ -43,6 +43,34 @@ Development event injection and the live Codex and Claude Code hook executable
 boundary. Provider codecs decode only a small allowlist of status metadata. The
 helper writes only the response format required by the invoking agent to stdout.
 
+## Provider capacity
+
+Chimlo obtains capacity only through provider-owned runtime surfaces. Codex
+weekly capacity comes from the existing `codex app-server` connection through
+`account/rateLimits/read` and sparse `account/rateLimits/updated` notifications;
+non-weekly Codex windows are ignored. Claude's primary source is an opt-in
+status-line bridge that caches only Claude Code's documented `rate_limits`
+payload and configures its documented `refreshInterval` at 60 seconds. Installing
+the bridge preserves and later restores any existing custom status-line
+configuration, including its previous refresh interval.
+
+When the Claude cache is more than five minutes old and the owner opens the
+Usage disclosure, Chimlo may launch one bounded, tool-disabled, probe-owned
+Claude Code terminal and parse the provider-owned `/usage` panel. This fallback
+runs only while capacity details are disclosed, reuses one probe-owned session
+identity, removes its dedicated transcript artifacts after exit, and is excluded
+from local-session discovery. A failed probe cools down for five minutes.
+
+These sources keep capacity exact without reading provider credentials,
+Keychain items, browser cookies, private OAuth endpoints, historical rollout
+snapshots, or token-derived estimates. The `/usage` fallback stores the exact
+percentages shown by Claude Code and derives reset times only from its
+provider-reported relative or timezone-qualified reset labels. A still-valid
+timestamp from the status-line payload remains preferred because it is more
+precise. When no trustworthy value is available, Chimlo reports Capacity
+unavailable. Claude's status line continues refreshing while an otherwise idle
+session remains open.
+
 ## Safety boundaries
 
 - Pending decisions, provider permissions, and questions are keyed by request

@@ -350,12 +350,6 @@ private struct CompactIslandView: View {
         if model.shouldShowCompactMedia, let presentation = media.presentation {
             return "\(presentation.accessibilityDescription)."
         }
-        if let warning = model.lowCapacityReading,
-           let window = warning.window,
-           let remaining = warning.remainingPercentage {
-            let provider = window.provider == .codex ? "Codex" : "Claude"
-            return "Open Chimlo. \(provider) capacity is \(Int(remaining.rounded())) percent remaining."
-        }
         return "Open Chimlo. \(summary). \(model.compactLabel.lowercased())."
     }
 
@@ -422,11 +416,6 @@ private struct CompactIslandView: View {
             compactSignalText("?", color: ChimloTheme.attention)
         } else if model.sessions.contains(where: { $0.mood == .failed }) {
             compactSignalText("×", color: ChimloTheme.clayText)
-        } else if let warning = model.lowCapacityReading {
-            PixelUsageGlyph(
-                color: warning.isExhausted ? ChimloTheme.clayText : ChimloTheme.attention,
-                size: 12
-            )
         } else if !model.sessions.isEmpty {
             compactSignalText(
                 "\(min(model.sessions.count, 9))",
@@ -650,6 +639,12 @@ private struct UsageProviderBlock: View {
                 ProviderLogoView(provider: provider, size: 9)
 
                 PixelText(text: providerName, pixelSize: 1, color: providerColor, spacing: 1)
+
+                if let freshness {
+                    PixelText(text: freshness.text, pixelSize: 1, color: ChimloTheme.mutedPaper, spacing: 1)
+                        .opacity(freshness.stale ? 0.4 : 0.85)
+                        .accessibilityLabel("Updated \(freshness.text.lowercased()) ago.")
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -668,6 +663,24 @@ private struct UsageProviderBlock: View {
 
     private var providerName: String {
         provider == .codex ? "CODEX" : "CLAUDE"
+    }
+
+    // "Last updated" age shown beside the provider name; dimmed further once the
+    // data is stale past the freshness window so a failed or slow fetch is
+    // visible rather than confident stale numbers.
+    private var freshness: (text: String, stale: Bool)? {
+        guard let updated = readings.first?.1.lastUpdatedAt else { return nil }
+        let elapsed = max(0, now.timeIntervalSince(updated))
+        return (compactAge(elapsed), elapsed > CapacityPolicy.freshnessInterval)
+    }
+
+    private func compactAge(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds / 60)
+        if minutes < 1 { return "NOW" }
+        if minutes < 60 { return "\(minutes)M" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)H" }
+        return "\(hours / 24)D"
     }
 
     private var providerColor: Color {
@@ -706,19 +719,35 @@ private struct UsageLimitBlock: View {
     }
 
     private func mainRowContent(includesReset: Bool) -> some View {
-        HStack(spacing: 5) {
+        // At the limit the remaining percentage is always "0%" and tells you
+        // nothing — blank that cell and surface the reset countdown in red in
+        // its own (already reserved) column. Every frame is retained so the
+        // row does not reflow.
+        let atLimit = reading.isExhausted
+        let reset = includesReset ? resetDuration(reading, now: now) : nil
+        let hidePercent = atLimit && reset != nil
+        return HStack(spacing: 5) {
             rowLabel(label)
 
-            gauge(usedOverride: nil, colorOverride: nil)
-
-            percentText(
-                capacityUsedText(reading),
-                color: capacityColor(reading, provider: provider)
+            gauge(
+                usedOverride: reading.remainingPercentage,
+                colorOverride: atLimit ? ChimloTheme.clayText.opacity(0.4) : nil
             )
 
-            if includesReset, let reset = resetDuration(reading, now: now) {
-                trailingText(reset)
+            if hidePercent {
+                percentText("", color: .clear)
+            } else {
+                percentText(
+                    capacityPercentageText(reading),
+                    color: capacityColor(reading, provider: provider)
+                )
             }
+
+            trailingText(
+                reset ?? "",
+                color: atLimit && reset != nil ? ChimloTheme.clayText : ChimloTheme.quietPaper
+            )
+            .accessibilityHidden(reset == nil)
         }
     }
 
@@ -726,13 +755,19 @@ private struct UsageLimitBlock: View {
     // your used percentage against the pace you are burning it at.
     @ViewBuilder private var paceRow: some View {
         if let pace = paceFraction(reading, now: now) {
-            let percent = Int((pace * 100).rounded())
+            let pacePercent = pace * 100
+            let percent = Int(pacePercent.rounded())
+            // If usage is meaningfully ahead of pace you are burning the window
+            // early — tint the pace bar and value amber; otherwise leave grey.
+            let burningEarly = (reading.usedPercentage ?? 0) - pacePercent > paceWarningMargin
+            let barColor = burningEarly ? ChimloTheme.attention : ChimloTheme.mutedPaper
+            let valueColor = burningEarly ? ChimloTheme.attention : ChimloTheme.quietPaper
             HStack(spacing: 5) {
                 rowLabel("PACE")
 
-                gauge(usedOverride: pace * 100, colorOverride: ChimloTheme.mutedPaper)
+                gauge(usedOverride: pacePercent, colorOverride: barColor)
 
-                percentText("\(percent)%", color: ChimloTheme.quietPaper)
+                percentText("\(percent)%", color: valueColor)
 
                 trailingText("OF 7D")
             }
@@ -748,6 +783,10 @@ private struct UsageLimitBlock: View {
     private var labelColumnWidth: CGFloat {
         provider == .codex ? 26 : 15
     }
+
+    // How far usage must lead pace (in points) before the pace row warns that
+    // the window is being burned early.
+    private let paceWarningMargin: Double = 10
 
     private func rowLabel(_ text: String) -> some View {
         PixelText(text: text, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
@@ -772,15 +811,15 @@ private struct UsageLimitBlock: View {
             .font(.system(size: 11, weight: .bold, design: .rounded))
             .foregroundStyle(color)
             .monospacedDigit()
-            .frame(width: 30, alignment: .leading)
+            .frame(width: 34, alignment: .leading)
             .padding(.leading, 2)
     }
 
     // Fixed column so every row's gauge ends at the same x (7d row and pace
     // row line up) and the reset stays pinned to the right edge, away from the
     // percentage which hugs the bar.
-    private func trailingText(_ text: String) -> some View {
-        PixelText(text: text, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+    private func trailingText(_ text: String, color: Color = ChimloTheme.quietPaper) -> some View {
+        PixelText(text: text, pixelSize: 1, color: color, spacing: 1)
             .frame(width: 42, alignment: .trailing)
     }
 }
@@ -804,7 +843,7 @@ private struct PixelCapacityGauge: View {
         HStack(spacing: segmentSpacing) {
             ForEach(0..<segmentCount, id: \.self) { index in
                 Rectangle()
-                    .fill(index < filledSegments ? fillColor : ChimloTheme.mutedPaper.opacity(0.24))
+                    .fill(fillStyle(for: index))
                     .frame(
                         width: fillsWidth ? nil : segmentWidth,
                         height: segmentHeight
@@ -816,39 +855,39 @@ private struct PixelCapacityGauge: View {
         .accessibilityHidden(true)
     }
 
-    // The bar fills as capacity is consumed: a full bar means fully used.
-    private var filledSegments: Int {
-        let used: Double
-        if let usedOverride {
-            used = usedOverride
-        } else if let reading = reading.usedPercentage {
-            used = reading
-        } else {
-            return 0
+    private enum SegmentState { case lit, dimmed, empty }
+
+    private var usedValue: Double? {
+        if let usedOverride { return usedOverride }
+        if let reading = reading.usedPercentage { return reading }
+        return nil
+    }
+
+    private func fillStyle(for index: Int) -> Color {
+        switch segmentState(index) {
+        case .lit:    return fillColor
+        case .dimmed: return fillColor.opacity(0.4)
+        case .empty:  return ChimloTheme.mutedPaper.opacity(0.24)
         }
-        guard used > 0 else { return 0 }
+    }
+
+    // The bar fills as capacity is consumed: a full bar means fully used.
+    // Blocks light only once a whole segment's worth is used (round down, not
+    // to nearest). Any leftover fraction below a full block shows as a single
+    // dimmed block rather than lighting a whole one.
+    private func segmentState(_ index: Int) -> SegmentState {
+        guard let used = usedValue, used > 0 else { return .empty }
         let percentagePerSegment = 100 / Double(segmentCount)
-        return min(segmentCount, max(1, Int(ceil(used / percentagePerSegment))))
+        let fullSegments = min(segmentCount, Int((used / percentagePerSegment).rounded(.down)))
+        if index < fullSegments { return .lit }
+        let hasPartial = fullSegments < segmentCount
+            && used - Double(fullSegments) * percentagePerSegment > 0
+        if index == fullSegments && hasPartial { return .dimmed }
+        return .empty
     }
 
     private var fillColor: Color {
         colorOverride ?? capacityColor(reading, provider: provider)
-    }
-}
-
-private struct PixelUsageGlyph: View {
-    let color: Color
-    var size: CGFloat = 12
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: max(1, size / 10)) {
-            Rectangle().frame(width: size / 5, height: size * 0.36)
-            Rectangle().frame(width: size / 5, height: size * 0.62)
-            Rectangle().frame(width: size / 5, height: size * 0.88)
-        }
-        .foregroundStyle(color)
-        .frame(width: size, height: size, alignment: .bottom)
-        .accessibilityHidden(true)
     }
 }
 
@@ -880,13 +919,6 @@ private enum ProviderLogo {
 private func capacityPercentageText(_ reading: CapacityReading) -> String {
     guard let remaining = reading.remainingPercentage else { return "—%" }
     return "\(Int(remaining.rounded()))%"
-}
-
-// The dashboard bars fill as capacity is consumed, so the paired label shows
-// the used percentage rather than the remaining one.
-private func capacityUsedText(_ reading: CapacityReading) -> String {
-    guard let used = reading.usedPercentage else { return "—%" }
-    return "\(Int(used.rounded()))%"
 }
 
 // Fraction (0...1) of the window that has elapsed — the "pace" you are burning
@@ -959,9 +991,11 @@ private func compactDuration(until date: Date, now: Date) -> String {
     let days = totalMinutes / (24 * 60)
     let hours = (totalMinutes % (24 * 60)) / 60
     let minutes = totalMinutes % 60
-    if days > 0 { return "\(days)d \(hours)h" }
-    if hours > 0 { return "\(hours)h \(minutes)m" }
-    return "\(minutes)m"
+    // Zero-pad the trailing unit so the column keeps a fixed width and the
+    // digits do not jump as the countdown drops (e.g. "6D 04H" vs "5D 09H").
+    if days > 0 { return String(format: "%dd %02dh", days, hours) }
+    if hours > 0 { return String(format: "%dh %02dm", hours, minutes) }
+    return String(format: "%02dm", minutes)
 }
 
 private func exactTimestamp(_ date: Date) -> String {

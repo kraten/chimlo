@@ -65,6 +65,10 @@ final class LocalAgentProcessDiscovery: @unchecked Sendable {
             let fileOutput = run("/usr/sbin/lsof", ["-a", "-p", "\(process.processID)", "-Fn"])
             let cwdOutput = run("/usr/sbin/lsof", ["-a", "-p", "\(process.processID)", "-d", "cwd", "-Fn"])
             let workingDirectory = Self.firstPath(in: cwdOutput)
+            if agent == .claude,
+               workingDirectory == ClaudeUsageProbe.workingDirectoryURL().path {
+                continue
+            }
             let transcriptPath = Self.transcriptPath(in: fileOutput, agent: agent)
             let sessionID = transcriptPath.flatMap(Self.firstUUID)
                 ?? Self.sessionIDArgument(in: process.command)

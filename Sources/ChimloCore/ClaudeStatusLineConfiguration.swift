@@ -36,6 +36,7 @@ public struct ClaudeStatusLineConfigurationPlan: Equatable, Sendable {
 public enum ClaudeStatusLineConfiguration {
     public static let managedKey = "_chimloStatusLineManaged"
     public static let originalKey = "_chimloOriginalStatusLine"
+    public static let refreshIntervalSeconds = 60
 
     public static func installationState(
         in data: Data?,
@@ -46,7 +47,9 @@ public enum ClaudeStatusLineConfiguration {
         guard root[managedKey] as? Bool == true else { return .missing }
         guard let statusLine = root["statusLine"] as? [String: Any],
               statusLine["type"] as? String == "command",
-              statusLine["command"] as? String == wrapperPath else {
+              statusLine["command"] as? String == wrapperPath,
+              (statusLine["refreshInterval"] as? NSNumber)?.intValue
+                == refreshIntervalSeconds else {
             return .needsRepair
         }
         return .current
@@ -78,6 +81,7 @@ public enum ClaudeStatusLineConfiguration {
         var managed = (root[originalKey] as? [String: Any]) ?? [:]
         managed["type"] = "command"
         managed["command"] = wrapperPath
+        managed["refreshInterval"] = refreshIntervalSeconds
         root["statusLine"] = managed
         root[managedKey] = true
 

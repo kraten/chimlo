@@ -235,6 +235,7 @@ final class ApplicationModel: ObservableObject {
     private lazy var integrationManager = AgentIntegrationManager.live()
     private let localSessionRuntime = LocalSessionRuntime()
     private let codexDesktopAdapter = CodexDesktopSessionAdapter()
+    private let claudeUsageProbe = ClaudeUsageProbe()
     private var codexAppServerConnected = false
     private var sessionRemovalTasks: [String: Task<Void, Never>] = [:]
     private var sessionActivityExpiryTask: Task<Void, Never>?
@@ -245,6 +246,8 @@ final class ApplicationModel: ObservableObject {
     private var codexModelDisplayNames: [String: String] = [:]
     private var systemFeedbackExpiryTask: Task<Void, Never>?
     private var capacityMonitorTask: Task<Void, Never>?
+    private var claudeUsageRefreshTask: Task<Void, Never>?
+    private var lastClaudeUsageProbeAttemptAt: Date?
     private var capacityRefreshFailures: Set<CapacityProvider> = []
 
     var panelSize: CGSize {
@@ -311,8 +314,7 @@ final class ApplicationModel: ObservableObject {
     var shouldShowCompactMedia: Bool {
         guard let media = mediaPlayback.presentation,
               media.isPlaying,
-              pendingDecision == nil,
-              lowCapacityReading == nil else { return false }
+              pendingDecision == nil else { return false }
         return !sessions.contains {
             $0.needsAttention || $0.mood == .failed
         }
@@ -511,6 +513,8 @@ final class ApplicationModel: ObservableObject {
         codexDesktopAdapter.stop()
         capacityMonitorTask?.cancel()
         capacityMonitorTask = nil
+        claudeUsageRefreshTask?.cancel()
+        claudeUsageRefreshTask = nil
         sessionActivityExpiryTask?.cancel()
         sessionActivityExpiryTask = nil
         for task in sessionRemovalTasks.values { task.cancel() }
@@ -580,6 +584,9 @@ final class ApplicationModel: ObservableObject {
         guard panelMode == .sessions else { return }
         cancelCollapse()
         showsUsageDetails.toggle()
+        if showsUsageDetails {
+            refreshClaudeCapacityFromCLIIfNeeded()
+        }
     }
 
     func capacityReading(
@@ -587,11 +594,12 @@ final class ApplicationModel: ObservableObject {
         kind: CapacityWindowKind
     ) -> CapacityReading {
         let snapshot = capacitySnapshots[provider]
-        guard let window = snapshot?.window(kind), !window.isExpired(at: capacityClock) else {
+        let window = snapshot?.window(kind)
+        guard let window, !window.isExpired(at: capacityClock) else {
             return CapacityReading(
                 window: nil,
                 isApproximate: false,
-                lastUpdatedAt: snapshot?.observedAt
+                lastUpdatedAt: window?.observedAt ?? snapshot?.observedAt
             )
         }
         return CapacityReading(
@@ -601,7 +609,7 @@ final class ApplicationModel: ObservableObject {
                 refreshFailed: capacityRefreshFailures.contains(provider),
                 now: capacityClock
             ),
-            lastUpdatedAt: snapshot?.observedAt
+            lastUpdatedAt: window.observedAt
         )
     }
 
@@ -610,17 +618,6 @@ final class ApplicationModel: ObservableObject {
             provider: provider,
             kind: provider == .codex ? .weekly : .session
         )
-    }
-
-    var lowCapacityReading: CapacityReading? {
-        let readings = [
-            capacityReading(provider: .codex, kind: .weekly),
-            capacityReading(provider: .claude, kind: .session),
-            capacityReading(provider: .claude, kind: .weekly),
-        ]
-        return readings
-            .filter(\.isWarning)
-            .min { ($0.remainingPercentage ?? 101) < ($1.remainingPercentage ?? 101) }
     }
 
     func updateIslandLayout(_ layout: IslandLayout) {
@@ -1185,6 +1182,9 @@ final class ApplicationModel: ObservableObject {
                 guard !Task.isCancelled, let self else { return }
                 capacityClock = .now
                 refreshClaudeCapacityFromCache()
+                if showsUsageDetails {
+                    refreshClaudeCapacityFromCLIIfNeeded()
+                }
             }
         }
     }
@@ -1197,6 +1197,37 @@ final class ApplicationModel: ObservableObject {
             return
         }
         receiveCapacity(snapshot, persist: false)
+    }
+
+    private func refreshClaudeCapacityFromCLIIfNeeded() {
+        let now = Date.now
+        guard claudeUsageRefreshTask == nil,
+              CapacityPolicy.shouldProbeClaudeUsage(
+                snapshot: capacitySnapshots[.claude],
+                lastAttemptAt: lastClaudeUsageProbeAttemptAt,
+                now: now
+              ) else {
+            return
+        }
+
+        lastClaudeUsageProbeAttemptAt = now
+        claudeUsageRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            defer { claudeUsageRefreshTask = nil }
+            do {
+                let probed = try await claudeUsageProbe.fetch()
+                guard !Task.isCancelled else { return }
+                let snapshot = probed.preservingValidResetTimes(
+                    from: capacitySnapshots[.claude]
+                )
+                receiveCapacity(snapshot)
+            } catch is CancellationError {
+                return
+            } catch {
+                capacityRefreshFailures.insert(.claude)
+                capacityClock = .now
+            }
+        }
     }
 
     private func receiveCapacity(
