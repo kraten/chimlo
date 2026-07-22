@@ -545,7 +545,10 @@ private struct InlineCapacityView: View {
                     segmentWidth: segmentWidth,
                     segmentHeight: 7,
                     segmentCount: segmentCount,
-                    segmentSpacing: 1
+                    segmentSpacing: 1,
+                    // Header shows remaining %, so fill the bar to match that
+                    // number rather than the consumed amount.
+                    usedOverride: reading.remainingPercentage
                 )
                 capacityPercentage(
                     reading,
@@ -605,16 +608,17 @@ private struct UsageDashboardView: View {
             UsageProviderBlock(
                 provider: .claude,
                 readings: [
-                    ("5h", model.capacityReading(provider: .claude, kind: .session)),
                     ("7d", model.capacityReading(provider: .claude, kind: .weekly)),
+                    ("5h", model.capacityReading(provider: .claude, kind: .session)),
                 ],
                 now: model.capacityClock
             )
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 9)
+        .padding(.top, 12)
+        .padding(.bottom, 7)
         .frame(maxWidth: .infinity)
-        .frame(height: CapacityLayout.detailsHeight)
+        .frame(height: CapacityLayout.detailsHeight, alignment: .top)
         .background(
             panelShape.fill(
                 ChimloTheme.raisedSurface(increasedContrast: model.accessibility.increaseContrast)
@@ -643,9 +647,7 @@ private struct UsageProviderBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(providerColor)
-                    .frame(width: 4, height: 4)
+                ProviderLogoView(provider: provider, size: 9)
 
                 PixelText(text: providerName, pixelSize: 1, color: providerColor, spacing: 1)
             }
@@ -696,13 +698,11 @@ private struct UsageLimitBlock: View {
     }
 
     // LABEL · gauge · PERCENT · RESET — label sits on the left, the reset
-    // countdown is pinned inline on the right (dropped first when space is tight).
+    // countdown is pinned inline on the right. The gauge flexes to fill, so the
+    // reset always has room and is shown.
     private var capacityRow: some View {
-        ViewThatFits(in: .horizontal) {
-            mainRowContent(includesReset: true)
-            mainRowContent(includesReset: false)
-        }
-        .frame(height: 16, alignment: .leading)
+        mainRowContent(includesReset: true)
+            .frame(height: 16, alignment: .leading)
     }
 
     private func mainRowContent(includesReset: Bool) -> some View {
@@ -761,6 +761,7 @@ private struct UsageLimitBlock: View {
             segmentWidth: 5,
             segmentHeight: 8,
             segmentCount: 10,
+            fillsWidth: true,
             usedOverride: usedOverride,
             colorOverride: colorOverride
         )
@@ -771,12 +772,16 @@ private struct UsageLimitBlock: View {
             .font(.system(size: 11, weight: .bold, design: .rounded))
             .foregroundStyle(color)
             .monospacedDigit()
-            .frame(minWidth: 34, alignment: .leading)
-            .padding(.leading, 3)
+            .frame(width: 30, alignment: .leading)
+            .padding(.leading, 2)
     }
 
+    // Fixed column so every row's gauge ends at the same x (7d row and pace
+    // row line up) and the reset stays pinned to the right edge, away from the
+    // percentage which hugs the bar.
     private func trailingText(_ text: String) -> some View {
         PixelText(text: text, pixelSize: 1, color: ChimloTheme.quietPaper, spacing: 1)
+            .frame(width: 42, alignment: .trailing)
     }
 }
 
@@ -787,6 +792,9 @@ private struct PixelCapacityGauge: View {
     var segmentHeight: CGFloat = 7
     var segmentCount = 5
     var segmentSpacing: CGFloat = 2
+    // When true the segments stretch to fill the available width instead of
+    // using a fixed segmentWidth, so the bar spans the full row.
+    var fillsWidth = false
     // When set, the gauge fills by this used-percentage (0...100) in the given
     // color instead of deriving from the reading. Used by the codex pace row.
     var usedOverride: Double?
@@ -797,9 +805,14 @@ private struct PixelCapacityGauge: View {
             ForEach(0..<segmentCount, id: \.self) { index in
                 Rectangle()
                     .fill(index < filledSegments ? fillColor : ChimloTheme.mutedPaper.opacity(0.24))
-                    .frame(width: segmentWidth, height: segmentHeight)
+                    .frame(
+                        width: fillsWidth ? nil : segmentWidth,
+                        height: segmentHeight
+                    )
+                    .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
         }
+        .frame(maxWidth: fillsWidth ? .infinity : nil)
         .accessibilityHidden(true)
     }
 
@@ -866,16 +879,14 @@ private enum ProviderLogo {
 
 private func capacityPercentageText(_ reading: CapacityReading) -> String {
     guard let remaining = reading.remainingPercentage else { return "—%" }
-    let prefix = reading.isApproximate ? "~" : ""
-    return "\(prefix)\(Int(remaining.rounded()))%"
+    return "\(Int(remaining.rounded()))%"
 }
 
 // The dashboard bars fill as capacity is consumed, so the paired label shows
 // the used percentage rather than the remaining one.
 private func capacityUsedText(_ reading: CapacityReading) -> String {
     guard let used = reading.usedPercentage else { return "—%" }
-    let prefix = reading.isApproximate ? "~" : ""
-    return "\(prefix)\(Int(used.rounded()))%"
+    return "\(Int(used.rounded()))%"
 }
 
 // Fraction (0...1) of the window that has elapsed — the "pace" you are burning
@@ -892,10 +903,12 @@ private func paceFraction(_ reading: CapacityReading, now: Date) -> Double? {
     return min(1, max(0, elapsed / duration))
 }
 
+// Urgency comes from colour, not row position: any bar and its percentage go
+// amber above 80% used and red at 100%, on whichever row it sits.
 private func capacityColor(_ reading: CapacityReading, provider: CapacityProvider) -> Color {
-    guard reading.remainingPercentage != nil else { return ChimloTheme.mutedPaper }
-    if reading.isExhausted { return ChimloTheme.clayText }
-    if reading.isWarning { return ChimloTheme.attention }
+    guard let used = reading.usedPercentage else { return ChimloTheme.mutedPaper }
+    if used >= 100 { return ChimloTheme.clayText }
+    if used > 80 { return ChimloTheme.attention }
     return provider == .codex ? ChimloTheme.providerBlue : ChimloTheme.providerOrange
 }
 
