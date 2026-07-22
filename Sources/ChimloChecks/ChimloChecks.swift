@@ -39,6 +39,7 @@ private struct CheckSuite {
 
     mutating func run() async {
         notchLayout()
+        appUpdatePresentation()
         sessionListLayout()
         systemFeedback()
         hookPrivacyMapping()
@@ -61,7 +62,33 @@ private struct CheckSuite {
 
     mutating func runLayoutOnly() {
         notchLayout()
+        appUpdatePresentation()
         systemFeedback()
+    }
+
+    mutating func appUpdatePresentation() {
+        let presentation = AppUpdatePresentation(phase: .available)
+        expect(
+            presentation.title == "Update to latest version",
+            "available update uses the requested notification copy"
+        )
+        expect(presentation.isActionable, "available update is a one-click action")
+        expect(
+            AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+                presentation: presentation,
+                hasOwnerInteraction: false,
+                isOnboarding: false
+            ),
+            "available update takes the idle panel"
+        )
+        expect(
+            !AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+                presentation: presentation,
+                hasOwnerInteraction: true,
+                isOnboarding: false
+            ),
+            "owner interactions outrank update reminders"
+        )
     }
 
     mutating func runSessionVisibilityOnly() {

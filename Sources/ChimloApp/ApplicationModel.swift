@@ -156,6 +156,7 @@ struct SessionQuestionPresentation: Identifiable, Equatable, Sendable {
 enum PanelMode: Equatable, Sendable {
     case compact
     case sessions
+    case update
     case onboarding
 }
 
@@ -189,6 +190,7 @@ final class ApplicationModel: ObservableObject {
     @Published private(set) var capacitySnapshots: [CapacityProvider: ProviderCapacitySnapshot] = [:]
     @Published private(set) var capacityClock = Date.now
     @Published private(set) var showsUsageDetails = false
+    @Published private(set) var updatePresentation: AppUpdatePresentation?
 
     let mediaPlayback = MediaPlaybackMonitor()
 
@@ -211,6 +213,7 @@ final class ApplicationModel: ObservableObject {
     }
 
     private let defaults: UserDefaults
+    private let updater = ChimloUpdater()
     private let chiptunePlayer = ChiptunePlayer()
     private let systemFeedbackEngine = SystemFeedbackEngine()
     private var reducer = SessionReducer()
@@ -277,6 +280,14 @@ final class ApplicationModel: ObservableObject {
                 height: islandLayout.expandedContentTopInset
                     + contentHeight
                     + (showsUsageDetails ? CapacityLayout.disclosureHeight : 0)
+            )
+        case .update:
+            return CGSize(
+                width: max(
+                    islandLayout.expandedNeckWidth,
+                    min(360, islandLayout.expandedWidth)
+                ),
+                height: max(islandLayout.expandedContentTopInset, 4) + 52
             )
         case .onboarding:
             return CGSize(
@@ -424,6 +435,9 @@ final class ApplicationModel: ObservableObject {
                 capacitySnapshots[provider] = snapshot
             }
         }
+        updater.presentationChanged = { [weak self] presentation in
+            self?.updatePresentationChanged(presentation)
+        }
     }
 
     func start() {
@@ -498,10 +512,11 @@ final class ApplicationModel: ObservableObject {
         refreshAgentConnections()
 
         if defaults.bool(forKey: Keys.completedOnboarding) {
-            panelMode = .compact
+            panelMode = preferredIdlePanelMode
         } else {
             replayOnboarding()
         }
+        updater.start()
     }
 
     func stop() {
@@ -551,7 +566,7 @@ final class ApplicationModel: ObservableObject {
         cancelCollapse()
         pointerInsideIsland = false
         showsUsageDetails = false
-        panelMode = .compact
+        panelMode = preferredIdlePanelMode
     }
 
     func pointerPresenceChanged(_ inside: Bool) {
@@ -587,9 +602,44 @@ final class ApplicationModel: ObservableObject {
                         || !sessionQuestions.isEmpty
                   ) else { return }
             showsUsageDetails = false
-            panelMode = .compact
+            panelMode = preferredIdlePanelMode
             collapseTask = nil
         }
+    }
+
+    func installUpdate() {
+        guard updatePresentation?.isActionable == true else { return }
+        cancelCollapse()
+        updater.installAvailableUpdate()
+    }
+
+    func checkForUpdates() {
+        cancelCollapse()
+        updater.checkForUpdates()
+    }
+
+    private var preferredIdlePanelMode: PanelMode {
+        AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+            presentation: updatePresentation,
+            hasOwnerInteraction: hasActiveOwnerInteraction,
+            isOnboarding: panelMode == .onboarding
+        ) ? .update : .compact
+    }
+
+    private func updatePresentationChanged(_ presentation: AppUpdatePresentation?) {
+        updatePresentation = presentation
+        if presentation == nil {
+            if panelMode == .update { panelMode = .compact }
+            return
+        }
+        guard AppUpdatePresentationPolicy.shouldTakeIdlePanel(
+            presentation: presentation,
+            hasOwnerInteraction: hasActiveOwnerInteraction,
+            isOnboarding: panelMode == .onboarding
+        ) else { return }
+        cancelCollapse()
+        showsUsageDetails = false
+        panelMode = .update
     }
 
     func cancelCollapse() {
@@ -720,7 +770,7 @@ final class ApplicationModel: ObservableObject {
         onboardingSessionID = nil
         onboardingEvents = []
         defaults.set(true, forKey: Keys.completedOnboarding)
-        panelMode = .compact
+        panelMode = preferredIdlePanelMode
         if sessions.isEmpty, keepPreviewSession, case .failed = serverState {
             installPreviewSession()
         }

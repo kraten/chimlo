@@ -14,6 +14,12 @@ let package = Package(
         .executable(name: "chimlo", targets: ["ChimloCLI"]),
         .executable(name: "chimlo-check", targets: ["ChimloChecks"]),
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            exact: "2.9.2"
+        ),
+    ],
     targets: [
         .target(name: "ChimloCore"),
         .target(
@@ -22,7 +28,17 @@ let package = Package(
         ),
         .executableTarget(
             name: "ChimloApp",
-            dependencies: ["ChimloCore", "ChimloProtocol"]
+            dependencies: [
+                "ChimloCore",
+                "ChimloProtocol",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks",
+                ]),
+            ]
         ),
         .executableTarget(
             name: "ChimloCLI",

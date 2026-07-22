@@ -40,6 +40,13 @@ struct IslandRootView: View {
                             .padding(.bottom, 10)
                             .frame(width: model.panelSize.width)
                             .frame(width: islandGeometry.size.width, alignment: .center)
+                    case .update:
+                        if let presentation = model.updatePresentation {
+                            UpdateReminderView(model: model, presentation: presentation)
+                                .frame(width: model.panelSize.width, height: 52, alignment: .top)
+                                .padding(.top, max(model.islandLayout.expandedContentTopInset, 4))
+                                .frame(width: islandGeometry.size.width, alignment: .center)
+                        }
                     case .onboarding:
                         OnboardingView(model: model)
                         if model.islandLayout.hasCameraHousing,
@@ -93,6 +100,149 @@ struct IslandRootView: View {
             )
             .fill(surface)
         }
+    }
+}
+
+private struct UpdateReminderView: View {
+    @ObservedObject var model: ApplicationModel
+    let presentation: AppUpdatePresentation
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: model.installUpdate) {
+            HStack(spacing: 10) {
+                updateMark
+                    .frame(width: 18, height: 18)
+                    .offset(y: arrowOffset)
+
+                Text(presentation.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+            }
+            .foregroundStyle(labelColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(UpdateReminderButtonStyle())
+        .disabled(!presentation.isActionable)
+        .onHover { isHovering = $0 }
+        .animation(
+            model.accessibility.reduceMotion ? nil : .easeOut(duration: 0.12),
+            value: isHovering
+        )
+        .accessibilityLabel(presentation.title)
+        .accessibilityHint(
+            presentation.isActionable
+                ? "Downloads, installs, and relaunches Chimlo. Your settings stay unchanged."
+                : "Chimlo is updating."
+        )
+    }
+
+    private var arrowOffset: CGFloat {
+        guard presentation.isActionable, isHovering, !model.accessibility.reduceMotion else { return 0 }
+        return 1
+    }
+
+    private var labelColor: Color {
+        if !presentation.isActionable { return ChimloTheme.quietPaper }
+        return isHovering ? ChimloTheme.paper : ChimloTheme.quietPaper
+    }
+
+    @ViewBuilder
+    private var updateMark: some View {
+        switch presentation.phase {
+        case .available:
+            PixelUpdateArrow(color: labelColor)
+        case .failed:
+            PixelText(text: "!", pixelSize: 2, color: ChimloTheme.clayText, spacing: 1)
+        case .checking, .preparing, .installing:
+            PixelUpdateProgress(progress: nil, color: ChimloTheme.quietPaper)
+        case .downloading:
+            PixelUpdateProgress(
+                progress: presentation.normalizedProgress,
+                color: ChimloTheme.paper
+            )
+        }
+    }
+}
+
+private struct UpdateReminderButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                configuration.isPressed
+                    ? ChimloTheme.selectedInk.opacity(0.44)
+                    : Color.clear
+            )
+    }
+}
+
+private struct PixelUpdateArrow: View {
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(color)
+                .frame(width: 3, height: 9)
+                .offset(y: -2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 3, height: 3)
+                .offset(x: -3, y: 2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 3, height: 3)
+                .offset(x: 3, y: 2)
+            Rectangle()
+                .fill(color)
+                .frame(width: 9, height: 2)
+                .offset(y: 7)
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PixelUpdateProgress: View {
+    let progress: Double?
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(
+            .animation(
+                minimumInterval: 0.22,
+                paused: progress != nil || reduceMotion
+            )
+        ) { context in
+            HStack(spacing: 1) {
+                ForEach(0..<4, id: \.self) { index in
+                    Rectangle()
+                        .fill(
+                            isLit(index: index, at: context.date)
+                                ? color
+                                : ChimloTheme.mutedPaper.opacity(0.28)
+                        )
+                        .frame(width: 3, height: 9)
+                }
+            }
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
+    }
+
+    private var litCellCount: Int {
+        guard let progress else { return 0 }
+        return min(4, max(0, Int(ceil(progress * 4))))
+    }
+
+    private func isLit(index: Int, at date: Date) -> Bool {
+        if progress != nil { return index < litCellCount }
+        if reduceMotion { return index == 0 }
+        let frame = Int(date.timeIntervalSinceReferenceDate / 0.22)
+        return index == frame % 4
     }
 }
 
