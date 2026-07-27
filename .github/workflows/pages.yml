@@ -41,8 +41,9 @@ jobs:
           mkdir -p _site/assets
           cp pages/index.html _site/index.html
           cp pages/.nojekyll _site/.nojekyll
-          cp .github/chimlo-icon.png _site/assets/chimlo-icon.png
-          cp .github/social-preview.png _site/assets/social-preview.png
+          cp pages/assets/chimlo-icon.png _site/assets/chimlo-icon.png
+          cp pages/assets/social-preview.png _site/assets/social-preview.png
+          cp pages/assets/chimlo-desktop-wallpaper.jpg _site/assets/chimlo-desktop-wallpaper.jpg
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v4

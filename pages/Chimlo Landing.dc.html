@@ -1,474 +1,1672 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en" class="no-js">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chimlo - macOS activity island for coding agents</title>
-<meta name="description" content="Keep Codex and Claude Code sessions in your MacBook notch. See what is working, answer Claude Code questions, and approve tool requests from your editor.">
-<meta name="theme-color" content="#0a0b08">
-<link rel="canonical" href="https://kraten.github.io/chimlo/">
-<link rel="icon" href="../.github/chimlo-icon.png">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Chimlo">
-<meta property="og:title" content="Chimlo - macOS activity island for coding agents">
-<meta property="og:description" content="See what Codex and Claude Code are doing, answer Claude Code questions, and approve tool requests from your MacBook notch.">
-<meta property="og:url" content="https://kraten.github.io/chimlo/">
-<meta property="og:image" content="https://kraten.github.io/chimlo/assets/social-preview.png">
-<meta property="og:image:width" content="1774">
-<meta property="og:image:height" content="887">
-<meta property="og:image:alt" content="Chimlo activity island for coding agents">
-<meta name="twitter:card" content="summary_large_image">
-<script src="./support.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chimlo - Your coding agents, live in the notch</title>
+  <meta name="description" content="A native macOS activity island for Codex and Claude Code. See agent work, answer Claude questions, and handle Claude permissions from your MacBook notch.">
+  <meta name="theme-color" content="#07100a">
+  <link rel="canonical" href="https://kraten.github.io/chimlo/">
+  <link rel="icon" href="assets/chimlo-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Chimlo">
+  <meta property="og:title" content="Chimlo - Your coding agents, live in the notch">
+  <meta property="og:description" content="Watch Codex and Claude Code work, handle Claude handoffs, and jump back when the work is done.">
+  <meta property="og:url" content="https://kraten.github.io/chimlo/">
+  <meta property="og:image" content="https://kraten.github.io/chimlo/assets/social-preview.png">
+  <meta property="og:image:width" content="1774">
+  <meta property="og:image:height" content="887">
+  <meta property="og:image:alt" content="Chimlo showing Codex and Claude Code sessions in a MacBook notch">
+  <meta name="twitter:card" content="summary_large_image">
+  <script>document.documentElement.classList.remove("no-js");</script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #000;
+      --raised: #0f0f0f;
+      --selected: #1c1c1c;
+      --badge: #191919;
+      --badge-hover: #2a2a2a;
+      --row-hover: #121212;
+      --row-edge: #262626;
+      --attention-ink: #161616;
+      --paper: #f0f0f0;
+      --quiet: #a8a8a8;
+      --muted: #7d7d7d;
+      --green: #5fc26b;
+      --blue: #6b91d4;
+      --orange: #e08a4d;
+      --attention: #ef9747;
+      --clay: #e66b57;
+      --page: #07100a;
+      --page-soft: #0b160e;
+      --motion: cubic-bezier(.32, .72, 0, 1);
+      --system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--page); scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      background: var(--page);
+      color: var(--paper);
+      font-family: var(--system);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button, a, summary { -webkit-tap-highlight-color: transparent; }
+    button, a { font: inherit; }
+    button { color: inherit; }
+    a { color: inherit; text-decoration: none; }
+    img, svg { display: block; }
+    ::selection { background: rgba(95, 194, 107, .32); color: #fff; }
+    :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+    .skip-link {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      z-index: 500;
+      padding: 10px 13px;
+      background: #fff;
+      color: #000;
+      transform: translateY(-160%);
+      transition: transform 160ms var(--motion);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .hero {
+      position: relative;
+      min-height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+      background: #17271b url("assets/chimlo-desktop-wallpaper.jpg") center / cover no-repeat;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(90deg, rgba(2, 7, 3, .72) 0%, rgba(2, 7, 3, .15) 48%, rgba(2, 7, 3, .06) 72%),
+        linear-gradient(0deg, rgba(2, 7, 3, .68) 0%, transparent 52%);
+      pointer-events: none;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      opacity: .05;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+    }
+
+    .mac-menu {
+      position: absolute;
+      inset: 0 0 auto;
+      z-index: 60;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 13px;
+      background: rgba(20, 28, 21, .58);
+      color: rgba(255, 255, 255, .94);
+      backdrop-filter: saturate(135%) blur(22px);
+      -webkit-backdrop-filter: saturate(135%) blur(22px);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -.01em;
+    }
+    .mac-menu-left, .mac-menu-right {
+      display: flex;
+      align-items: center;
+      gap: 17px;
+      min-width: 0;
+    }
+    .mac-apple { width: 14px; height: 17px; fill: currentColor; }
+    .menu-app { font-weight: 700; }
+    .menu-label { color: rgba(255, 255, 255, .88); }
+    .github-menu-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      color: rgba(255, 255, 255, .94);
+      font-size: 12px;
+      font-weight: 650;
+      transition: color 140ms linear, transform 110ms var(--motion);
+    }
+    .github-menu-link svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+      flex: 0 0 auto;
+    }
+    .github-menu-link:active { transform: scale(.97); }
+    .menu-status { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+    .menu-clock { min-width: 84px; font-variant-numeric: tabular-nums; }
+
+    .desktop-file {
+      position: absolute;
+      z-index: 2;
+      top: 66px;
+      right: 34px;
+      width: 76px;
+      text-align: center;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.2;
+      text-shadow: 0 1px 3px #000, 0 0 7px rgba(0,0,0,.66);
+    }
+    .desktop-file img {
+      width: 54px;
+      height: 54px;
+      margin: 0 auto 6px;
+      border-radius: 12px;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
+    }
+
+    .dock {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      bottom: 9px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 7px 9px 8px;
+      transform: translateX(-50%);
+      border-radius: 17px;
+      background: rgba(225, 235, 226, .25);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 3px 12px rgba(0,0,0,.2);
+      backdrop-filter: saturate(145%) blur(20px);
+      -webkit-backdrop-filter: saturate(145%) blur(20px);
+    }
+    .dock-icon {
+      position: relative;
+      width: 45px;
+      height: 45px;
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 0 0 auto;
+      box-shadow: 0 2px 3px rgba(0,0,0,.28);
+    }
+    .dock-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .dock-folder {
+      background: linear-gradient(#68bdeb 0 22%, #61a9df 22%);
+      border-radius: 5px 5px 8px 8px;
+    }
+    .dock-folder::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 0;
+      width: 20px;
+      height: 8px;
+      border-radius: 5px 5px 0 0;
+      background: #85cef4;
+    }
+    .dock-terminal {
+      display: grid;
+      place-items: center;
+      background: #1b1b1b;
+      color: #e8e8e8;
+      font: 700 17px/1 var(--mono);
+      border: 1px solid rgba(255,255,255,.32);
+    }
+    .dock-calendar {
+      display: grid;
+      place-items: center;
+      padding-top: 8px;
+      background: linear-gradient(#e35c53 0 12px, #fafafa 12px);
+      color: #111;
+      font: 600 20px/1 var(--display);
+    }
+    .dock-calendar small {
+      position: absolute;
+      top: 1px;
+      color: #fff;
+      font-size: 8px;
+      text-transform: uppercase;
+    }
+    .dock-running::after {
+      content: "";
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      left: 50%;
+      bottom: -6px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: rgba(255,255,255,.82);
+    }
+
+    .hero-copy {
+      position: absolute;
+      z-index: 5;
+      left: clamp(24px, 5vw, 78px);
+      bottom: clamp(82px, 12vh, 132px);
+      width: min(760px, calc(100vw - 48px));
+      text-shadow: 0 2px 24px rgba(0,0,0,.45);
+    }
+    .hero-copy h1 {
+      max-width: 760px;
+      margin: 0;
+      color: #f7f7f2;
+      font: 670 clamp(46px, 6.2vw, 88px)/.96 var(--display);
+      letter-spacing: -.034em;
+      text-wrap: balance;
+    }
+    .hero-copy h1 span { color: rgba(247,247,242,.69); }
+    .hero-copy h1 > .desktop-title,
+    .hero-copy h1 > .mobile-title { color: inherit; }
+    .mobile-title { display: none; }
+    .hero-copy p {
+      max-width: 510px;
+      margin: 22px 0 0;
+      color: rgba(255,255,255,.78);
+      font-size: clamp(16px, 1.55vw, 20px);
+      line-height: 1.45;
+      letter-spacing: -.02em;
+    }
+    .hero-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 43px;
+      margin-top: 27px;
+      padding: 0 16px;
+      background: rgba(244,244,239,.96);
+      color: #0c0c0c;
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+      font-size: 14px;
+      font-weight: 700;
+      text-shadow: none;
+      transition: background-color 150ms linear, color 150ms linear, transform 120ms var(--motion);
+    }
+    .hero-action svg { width: 15px; height: 15px; fill: currentColor; }
+    .hero-action:active { transform: scale(.97); }
+    .hero-meta {
+      margin-left: 12px;
+      color: rgba(255,255,255,.62);
+      font-size: 12px;
+      text-shadow: 0 1px 5px #000;
+    }
+    .hero-github {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      color: rgba(255,255,255,.76);
+      font-size: 12px;
+      font-weight: 650;
+      text-shadow: 0 1px 5px #000;
+    }
+    .hero-github svg { width: 12px; height: 12px; fill: currentColor; }
+
+    .chimlo {
+      --island-width: 249px;
+      --island-height: 32px;
+      position: absolute;
+      z-index: 100;
+      top: 0;
+      left: 50%;
+      width: var(--island-width);
+      height: var(--island-height);
+      transform: translateX(-50%);
+      overflow: hidden;
+      background: var(--ink);
+      color: var(--paper);
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px));
+      transition: width 240ms var(--motion), height 240ms var(--motion), clip-path 240ms var(--motion);
+      contain: layout paint;
+    }
+    .chimlo[data-view="sessions"],
+    .chimlo[data-view="usage"],
+    .chimlo[data-view="permission"],
+    .chimlo[data-view="done"] {
+      --island-width: min(518px, calc(100vw - 32px));
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, calc(100% - 7px) 100%, 7px 100%, 7px 100%, 0 calc(100% - 7px));
+    }
+    .chimlo[data-view="sessions"] { --island-height: 190px; }
+    .chimlo[data-view="usage"] { --island-height: 202px; }
+    .chimlo[data-view="permission"] { --island-height: 256px; }
+    .chimlo[data-view="done"] { --island-height: 118px; }
+    .no-js .chimlo { --island-width: min(518px, calc(100vw - 32px)); --island-height: 190px; }
+
+    .compact-island {
+      height: 32px;
+      display: grid;
+      grid-template-columns: 32px 185px 32px;
+      align-items: center;
+    }
+    .chimlo:not([data-view="compact"]) .compact-island { display: none; }
+    .compact-hit {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    .chimlo:not([data-view="compact"]) .compact-hit { display: none; }
+    .compact-wing {
+      height: 32px;
+      display: grid;
+      place-items: center;
+    }
+    .compact-camera { height: 32px; }
+    .compact-count {
+      color: var(--green);
+      font: 800 11px/1 var(--system);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sprite {
+      width: 17px;
+      height: 17px;
+      shape-rendering: crispEdges;
+      image-rendering: pixelated;
+      overflow: visible;
+    }
+    .sprite.large { width: 34px; height: 34px; }
+    .sprite.medium { width: 28px; height: 28px; }
+
+    .expanded-island {
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .chimlo[data-view="compact"] .expanded-island { display: none; }
+    .island-status {
+      flex: 0 0 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 13px;
+      gap: 12px;
+    }
+    .capacity-button {
+      height: 26px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    .provider-mini {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .provider-logo {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+      flex: 0 0 auto;
+    }
+    .provider-mini.codex { color: var(--blue); }
+    .provider-mini.claude { color: var(--orange); }
+    .segments { display: flex; align-items: center; gap: 1px; height: 7px; }
+    .segments i {
+      display: block;
+      width: 3px;
+      height: 7px;
+      background: currentColor;
+    }
+    .segments i.off { background: var(--badge-hover); }
+    .provider-percent {
+      width: 32px;
+      color: currentColor;
+      font-size: 10px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      text-align: left;
+    }
+    .island-tools { display: flex; align-items: center; gap: 1px; }
+    .island-tool {
+      width: 25px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--paper);
+      cursor: pointer;
+    }
+    .island-tool svg { width: 14px; height: 14px; fill: currentColor; }
+    .close-tool { color: var(--muted); font-size: 15px; line-height: 1; }
+
+    .island-body {
+      min-height: 0;
+      flex: 1;
+      padding: 2px 16px 10px;
+      overflow: hidden;
+    }
+    .session-list { display: grid; gap: 6px; }
+    .session-row {
+      min-height: 62px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 34px;
+      align-items: center;
+      column-gap: 8px;
+      padding: 8px 10px 8px 8px;
+      border-radius: 7px;
+      background: transparent;
+    }
+    .session-row:hover { background: var(--row-hover); }
+    .session-copy { min-width: 0; }
+    .session-title-line {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+    .session-title {
+      overflow: hidden;
+      color: var(--paper);
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -.012em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .jump-mark {
+      width: 8px;
+      height: 8px;
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+    .session-prompt {
+      overflow: hidden;
+      margin: 3px 0 5px;
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .session-prompt b { color: var(--paper); font-weight: 650; }
+    .session-meta { display: flex; align-items: center; gap: 4px; }
+    .meta-badge, .time-badge {
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      background: var(--badge);
+      color: var(--quiet);
+      font-size: 9px;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .meta-badge { padding: 0 6px; }
+    .time-badge { width: 34px; color: var(--muted); }
+
+    .usage-panel {
+      height: 152px;
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: 16px;
+      align-items: stretch;
+      padding: 12px 16px 7px;
+    }
+    .usage-divider {
+      width: 1px;
+      background: repeating-linear-gradient(to bottom, var(--row-edge) 0 2px, transparent 2px 5px);
+    }
+    .usage-provider { min-width: 0; }
+    .usage-provider-head {
+      height: 23px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .usage-provider-head .provider-logo { width: 9px; height: 9px; }
+    .usage-row {
+      height: 33px;
+      display: grid;
+      grid-template-columns: 26px minmax(56px, 1fr) 34px 42px;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      font-weight: 650;
+    }
+    .usage-provider.claude .usage-row { grid-template-columns: 26px minmax(56px, 1fr) 34px 42px; }
+    .usage-label { color: var(--muted); }
+    .usage-gauge { display: flex; gap: 2px; height: 8px; }
+    .usage-gauge i {
+      min-width: 3px;
+      height: 8px;
+      flex: 1;
+      background: currentColor;
+    }
+    .usage-gauge i.off { background: var(--badge-hover); }
+    .usage-number { text-align: right; font-variant-numeric: tabular-nums; }
+    .usage-reset { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .usage-provider.codex .usage-gauge, .usage-provider.codex .usage-number { color: var(--blue); }
+    .usage-provider.claude .usage-gauge, .usage-provider.claude .usage-number { color: var(--orange); }
+
+    .permission-panel {
+      margin-top: 2px;
+      padding: 10px 10px 9px 12px;
+      background: var(--attention-ink);
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    }
+    .permission-head {
+      display: grid;
+      grid-template-columns: 15px minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+    }
+    .warning-glyph {
+      width: 15px;
+      height: 15px;
+      color: var(--attention);
+    }
+    .permission-tool { font-size: 11px; font-weight: 700; }
+    .permission-kind { margin-top: 1px; color: var(--muted); font-size: 9px; }
+    .permission-prompt { margin: 8px 0 3px; color: var(--paper); font-size: 12px; font-weight: 650; }
+    .permission-detail { margin: 0; color: var(--quiet); font-size: 10px; line-height: 1.35; }
+    .permission-preview {
+      margin-top: 8px;
+      padding: 8px 9px;
+      overflow: hidden;
+      background: var(--raised);
+      color: var(--quiet);
+      clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+      font: 10.5px/1.35 var(--mono);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .permission-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+      margin-top: 8px;
+    }
+    .permission-action {
+      min-height: 31px;
+      border: 0;
+      clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+      background: var(--badge-hover);
+      color: var(--paper);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 120ms linear, transform 100ms var(--motion);
+    }
+    .permission-action.deny { background: var(--clay); color: #161616; }
+    .permission-action.once { background: var(--paper); color: #161616; }
+    .permission-action.always { background: var(--orange); color: #161616; }
+    .permission-action:active { transform: scale(.97); }
+
+    .done-panel {
+      height: 72px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 4px 12px 10px 8px;
+    }
+    .done-panel strong { display: block; font-size: 13px; }
+    .done-panel span { display: block; margin-top: 3px; color: var(--quiet); font-size: 11px; }
+
+    .island-body > [data-panel] { display: none; }
+    .chimlo[data-view="sessions"] [data-panel="sessions"] { display: block; }
+    .chimlo[data-view="usage"] [data-panel="usage"] { display: grid; }
+    .chimlo[data-view="permission"] [data-panel="permission"] { display: block; }
+    .chimlo[data-view="done"] [data-panel="done"] { display: grid; }
+    .no-js .chimlo [data-panel="sessions"] { display: block; }
+
+    .demo-controls {
+      position: absolute;
+      z-index: 6;
+      right: 22px;
+      bottom: 21px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .demo-state {
+      color: rgba(255,255,255,.68);
+      font-size: 12px;
+      text-shadow: 0 1px 4px #000;
+    }
+    .replay {
+      min-height: 32px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(24,30,25,.62);
+      color: rgba(255,255,255,.88);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      font-size: 12px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .mac-pointer {
+      position: absolute;
+      z-index: 180;
+      top: 43%;
+      left: 63%;
+      width: 23px;
+      height: 32px;
+      pointer-events: none;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,.5));
+      transform-origin: 2px 2px;
+      transition: left 680ms var(--motion), top 680ms var(--motion), transform 110ms var(--motion), opacity 180ms linear;
+    }
+    .mac-pointer svg { width: 100%; height: 100%; }
+    .mac-pointer.is-pressed { transform: scale(.92); }
+    .mac-pointer.is-hidden { opacity: 0; }
+    .no-js .mac-pointer { display: none; }
+
+    main { background: #f1f3ee; color: #111612; }
+    .section-shell {
+      width: min(1240px, calc(100% - 48px));
+      margin: 0 auto;
+    }
+
+    .actual-ui {
+      position: relative;
+      overflow: hidden;
+      background: #070a08;
+      color: var(--paper);
+    }
+    .actual-ui::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(115deg, rgba(37,69,43,.24), transparent 44%),
+        linear-gradient(0deg, #070a08 0%, transparent 24%, transparent 76%, #070a08 100%);
+      pointer-events: none;
+    }
+    .actual-layout {
+      position: relative;
+      z-index: 1;
+      padding: 122px 0 116px;
+    }
+    .actual-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr);
+      gap: clamp(42px, 8vw, 120px);
+      align-items: end;
+      margin-bottom: 64px;
+    }
+    .actual-head h2 {
+      margin: 0;
+      max-width: 760px;
+      color: #f4f5f0;
+      font: 630 clamp(42px, 5.7vw, 78px)/.99 var(--display);
+      letter-spacing: -.032em;
+    }
+    .actual-head h2 span { color: #789c7e; }
+    .actual-head h2 > .actual-desktop-title,
+    .actual-head h2 > .actual-mobile-title { color: inherit; }
+    .actual-mobile-title { display: none; }
+    .actual-head p {
+      max-width: 440px;
+      margin: 0 0 5px;
+      color: #a5aea7;
+      font-size: 17px;
+      line-height: 1.55;
+      letter-spacing: -.008em;
+    }
+    .product-shot {
+      position: relative;
+      width: 100%;
+    }
+    .product-shot img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+    .utility-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(30px, 5vw, 72px);
+      margin-top: 46px;
+    }
+    .utility-item strong {
+      display: block;
+      color: #e5e9e3;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -.012em;
+    }
+    .utility-item p {
+      max-width: 340px;
+      margin: 9px 0 0;
+      color: #89938b;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .states {
+      position: relative;
+      padding: 120px 0 130px;
+      background: #e9eee7;
+      color: #111612;
+      overflow: hidden;
+    }
+    .states-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+      gap: 48px;
+      align-items: end;
+      margin-bottom: 74px;
+    }
+    .states-intro h2 {
+      margin: 0;
+      max-width: 760px;
+      font: 640 clamp(46px, 6.7vw, 90px)/.96 var(--display);
+      letter-spacing: -.034em;
+    }
+    .states-intro p {
+      margin: 0 0 4px;
+      color: #48534b;
+      font-size: 17px;
+      line-height: 1.55;
+    }
+    .state-stage {
+      display: grid;
+      grid-template-columns: minmax(190px, .48fr) minmax(0, 1.52fr);
+      min-height: 488px;
+      background: #0b0d0b;
+      clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    }
+    .state-tabs {
+      display: flex;
+      flex-direction: column;
+      padding: 30px 0 30px 30px;
+    }
+    .state-tab {
+      position: relative;
+      flex: 1;
+      display: grid;
+      align-content: center;
+      justify-items: start;
+      gap: 5px;
+      padding: 16px 24px 16px 18px;
+      border: 0;
+      background: transparent;
+      color: #657068;
+      text-align: left;
+      cursor: pointer;
+      transition: color 160ms linear, background-color 160ms linear;
+    }
+    .state-tab + .state-tab { border-top: 1px dotted #293029; }
+    .state-tab strong {
+      font: 640 clamp(25px, 3vw, 40px)/1.03 var(--display);
+      letter-spacing: -.026em;
+    }
+    .state-tab span { font-size: 12px; }
+    .state-tab[aria-selected="true"] { color: #f0f1ed; background: #121612; }
+    .state-tab[aria-selected="true"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 22%;
+      bottom: 22%;
+      width: 5px;
+      background: var(--green);
+      clip-path: polygon(0 0, 100% 5px, 100% calc(100% - 5px), 0 100%);
+    }
+    .state-canvas {
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      padding: 54px;
+      background:
+        linear-gradient(135deg, rgba(79,116,85,.13), transparent 52%),
+        #101510;
+    }
+    .native-surface {
+      width: min(594px, 100%);
+      background: #000;
+      color: var(--paper);
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+    }
+    .native-top {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 13px;
+    }
+    .native-panel { padding: 2px 16px 14px; }
+    .native-state { display: none; }
+    .native-state.is-current { display: block; }
+    .native-status-row {
+      min-height: 78px;
+      display: grid;
+      grid-template-columns: 34px minmax(0,1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px 9px 8px;
+    }
+    .native-status-row strong { font-size: 13px; }
+    .native-status-row p { margin: 4px 0 0; color: var(--quiet); font-size: 11px; line-height: 1.4; }
+    .state-caption {
+      width: min(594px, 100%);
+      margin: 18px 0 0;
+      color: #859087;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .ownership {
+      padding: 132px 0 124px;
+      background: #142519;
+      color: #eef2eb;
+    }
+    .ownership-line {
+      max-width: 1050px;
+      margin: 0;
+      font: 630 clamp(48px, 7vw, 100px)/.95 var(--display);
+      letter-spacing: -.034em;
+    }
+    .ownership-line span { color: #6f8974; }
+    .ownership-facts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      margin-top: 86px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(223,234,224,.18);
+    }
+    .ownership-facts strong { display: block; font-size: 17px; }
+    .ownership-facts p {
+      max-width: 310px;
+      margin: 9px 0 0;
+      color: #9faf9f;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .ownership-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 54px;
+      color: #f3f5ef;
+      font-size: 14px;
+      font-weight: 700;
+      transition: color 140ms linear;
+    }
+    .ownership-action svg { width: 14px; height: 14px; fill: currentColor; }
+
+    .questions {
+      padding: 118px 0 96px;
+      background: #edf0e9;
+      color: #111612;
+    }
+    .questions-layout {
+      display: grid;
+      grid-template-columns: .75fr 1.25fr;
+      gap: clamp(52px, 9vw, 144px);
+      align-items: start;
+    }
+    .questions h2 {
+      position: sticky;
+      top: 48px;
+      margin: 0;
+      font: 640 clamp(42px, 5.3vw, 74px)/.98 var(--display);
+      letter-spacing: -.03em;
+    }
+    .faq-item { border-top: 1px solid #bbc4ba; }
+    .faq-item:last-child { border-bottom: 1px solid #bbc4ba; }
+    .faq-item summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 73px;
+      padding: 18px 0;
+      font-size: 16px;
+      font-weight: 650;
+      cursor: pointer;
+      list-style: none;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: "+";
+      flex: 0 0 auto;
+      color: #546057;
+      font: 400 24px/1 var(--system);
+    }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item p {
+      max-width: 680px;
+      margin: -2px 0 24px;
+      color: #526057;
+      font-size: 15px;
+      line-height: 1.62;
+    }
+
+    .footer {
+      position: relative;
+      overflow: hidden;
+      padding: 56px 0 0;
+      background: #050806;
+      color: #e7eae5;
+    }
+    .footer-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      padding-bottom: 44px;
+    }
+    .footer-brand { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 700; }
+    .footer-brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 24px; color: #a2aaa4; font-size: 13px; }
+    .footer-links a { transition: color 140ms linear; }
+    .footer-bottom {
+      padding: 19px 0 22px;
+      border-top: 1px solid #1a211c;
+      color: #707a72;
+      font-size: 12px;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .hero-action:hover { background: var(--green); color: #071009; }
+      .github-menu-link:hover { color: var(--green); }
+      .permission-action:hover { filter: brightness(1.08); }
+      .replay:hover { background: rgba(42,51,44,.76); }
+      .ownership-action:hover, .footer-links a:hover { color: var(--green); }
+    }
+
+    @media (max-width: 900px) {
+      .menu-label.optional { display: none; }
+      .actual-head { grid-template-columns: 1fr; gap: 22px; }
+      .actual-head p { max-width: 620px; }
+      .utility-list { gap: 28px; }
+      .states-intro { grid-template-columns: 1fr; gap: 22px; }
+      .state-stage { grid-template-columns: 1fr; }
+      .state-tabs { flex-direction: row; padding: 18px; }
+      .state-tab { min-height: 104px; padding: 14px; }
+      .state-tab + .state-tab { border-top: 0; border-left: 1px dotted #293029; }
+      .state-tab[aria-selected="true"]::before { inset: auto 16% 0; width: auto; height: 4px; clip-path: none; }
+      .state-canvas { padding: 44px 28px; }
+      .ownership-facts { grid-template-columns: 1fr; gap: 26px; }
+      .questions-layout { grid-template-columns: 1fr; gap: 52px; }
+      .questions h2 { position: static; }
+    }
+
+    @media (max-width: 620px) {
+      .hero { min-height: max(700px, 100svh); background-position: 58% center; }
+      .mac-menu { padding: 0 10px; }
+      .mac-menu-left,
+      .mac-menu-right { visibility: hidden; }
+      .mac-menu-left { gap: 10px; }
+      .mac-menu-left .menu-app,
+      .mac-menu-left .menu-label { display: none; }
+      .mac-menu-right { gap: 9px; }
+      .github-menu-link span { display: none; }
+      .menu-clock { min-width: 72px; font-size: 11px; }
+      .desktop-file { top: 54px; right: 12px; transform: scale(.84); transform-origin: top right; }
+      .dock { bottom: 8px; transform: translateX(-50%) scale(.84); transform-origin: bottom center; }
+      .hero-copy {
+        left: 20px;
+        bottom: 90px;
+        width: calc(100vw - 40px);
+      }
+      .hero-copy h1 { max-width: 420px; font-size: 44px; line-height: .98; letter-spacing: -.03em; }
+      .desktop-title { display: none; }
+      .mobile-title { display: inline; }
+      .hero-copy p { max-width: 360px; margin-top: 17px; font-size: 16px; }
+      .hero-action { margin-top: 20px; }
+      .hero-meta { display: inline-block; margin: 10px 0 0; }
+      .hero-github { display: inline-flex; margin: 10px 0 0 12px; }
+      .chimlo[data-view="sessions"] { --island-height: 184px; }
+      .chimlo[data-view="usage"] { --island-height: 250px; }
+      .chimlo[data-view="permission"] { --island-height: 270px; }
+      .island-status { padding-inline: 9px; }
+      .capacity-button { gap: 5px; }
+      .provider-mini { gap: 3px; }
+      .provider-percent { width: 26px; font-size: 9px; }
+      .segments i { width: 2px; }
+      .island-body { padding-inline: 8px; }
+      .session-row { grid-template-columns: 30px minmax(0, 1fr) 31px; column-gap: 6px; padding-inline: 4px 6px; }
+      .sprite.large { width: 30px; height: 30px; }
+      .usage-panel { height: 200px; grid-template-columns: 1fr; gap: 6px; padding: 5px 8px 8px; }
+      .usage-divider { width: 100%; height: 1px; background: repeating-linear-gradient(to right, var(--row-edge) 0 2px, transparent 2px 5px); }
+      .usage-provider-head { height: 18px; }
+      .usage-row { height: 25px; }
+      .permission-panel { padding-inline: 9px 8px; }
+      .permission-actions { gap: 3px; }
+      .demo-controls { display: none; }
+      .mac-pointer { display: none; }
+      .section-shell { width: min(100% - 36px, 1240px); }
+      .actual-ui { min-height: auto; }
+      .actual-layout { padding: 92px 0 96px; }
+      .actual-head { margin-bottom: 42px; }
+      .actual-head h2 { font-size: 48px; }
+      .actual-desktop-title { display: none; }
+      .actual-mobile-title { display: inline; }
+      .actual-head p { font-size: 16px; }
+      .product-shot { width: 120%; margin-left: -4%; transform: none; }
+      .utility-list { grid-template-columns: 1fr; gap: 26px; margin-top: 36px; }
+      .states { padding: 92px 0 96px; }
+      .states-intro { margin-bottom: 48px; }
+      .states-intro h2 { font-size: 55px; }
+      .state-tabs { padding: 10px; overflow-x: auto; }
+      .state-tab { min-width: 112px; min-height: 83px; padding: 10px; }
+      .state-tab strong { font-size: 20px; letter-spacing: -.02em; }
+      .state-tab span { display: none; }
+      .state-canvas { padding: 30px 12px; }
+      .native-top { padding-inline: 8px; }
+      .native-panel { padding-inline: 8px; }
+      .native-surface .provider-mini.claude { display: none; }
+      .permission-actions { grid-template-columns: 1fr 1fr; }
+      .permission-actions .always { display: none; }
+      .ownership { padding: 96px 0 90px; }
+      .ownership-line { font-size: 58px; }
+      .ownership-facts { margin-top: 58px; }
+      .questions { padding: 88px 0 72px; }
+      .questions-layout { gap: 36px; }
+      .questions h2 { font-size: 51px; }
+      .footer-top { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+      .mac-pointer { display: none; }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .mac-menu, .dock, .replay { backdrop-filter: none; -webkit-backdrop-filter: none; }
+      .mac-menu { background: rgba(18,25,19,.94); }
+      .dock, .replay { background: rgba(28,35,29,.94); }
+    }
+
+    @media (prefers-contrast: more) {
+      .hero::before { background: rgba(0,0,0,.48); }
+      .hero-copy p, .hero-meta, .demo-state { color: #fff; }
+      .actual-head p, .state-caption { color: #d4dbd5; }
+    }
+  </style>
 </head>
 <body>
-<x-dc>
-<helmet>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body { background: #0a0b08; color: #edefe6; font-family: 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-  h1, h2, h3 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; }
-  a { color: oklch(0.83 0.16 145); text-decoration: none; }
-  a:hover { color: oklch(0.9 0.16 145); }
-  ::selection { background: oklch(0.83 0.16 145 / 0.3); color: #f4f7ee; }
-  @keyframes chBob { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-4px); } }
-  @keyframes chCaret { 0%,100%{ opacity:1; } 50%{ opacity:0; } }
-  @keyframes chFade { from{ transform:translateY(5px);} to{ transform:translateY(0);} }
-  @media (max-width: 720px) {
-    header nav > div,
-    header nav > span[style*="width:1px"] { display: none !important; }
-  }
-  @media (max-width: 520px) {
-    header nav { gap: 12px !important; padding: 13px 18px !important; }
-    [style*="min-width"] { min-width: 0 !important; }
-    #features [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
-    section > div > span[style*="white-space"] { white-space: normal !important; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    [style*="animation:chBob"],
-    [style*="animation:chCaret"],
-    [style*="animation:chFade"] { animation: none !important; }
-  }
-</style>
-</helmet>
-<div style="--bg:#0a0b08; --bg2:#0f110c; --panel:#090b07; --line:rgba(240,244,230,0.09); --line2:rgba(240,244,230,0.18); --ink:#edefe6; --muted:#96a08b; --dim:#5e6653; --green:oklch(0.83 0.16 145); --codex:oklch(0.68 0.15 250); --claude:oklch(0.75 0.15 55); background:var(--bg); color:var(--ink); overflow-x:hidden;">
+  <a class="skip-link" href="#content">Skip to content</a>
 
-  <!-- NAV -->
-  <header style="position:sticky; top:0; z-index:50; backdrop-filter:blur(14px); background:rgba(10,11,8,0.7); border-bottom:1px solid var(--line);">
-    <nav style="max-width:1080px; margin:0 auto; padding:15px 24px; display:flex; align-items:center; gap:18px;">
-      <a href="#top" style="display:flex; align-items:center; gap:10px; color:var(--ink);">
-        <img src="../.github/chimlo-icon.png" alt="Chimlo" width="27" height="27" style="border-radius:7px; display:block;">
-        <span style="font-family:'Bricolage Grotesque'; font-weight:700; font-size:19px; letter-spacing:-0.02em;">Chimlo</span>
-      </a>
-      <span style="flex:1;"></span>
-      <div style="display:flex; align-items:center; gap:24px; font-size:14px; color:var(--muted);">
-        <a href="#features" style="color:var(--muted);">Features</a>
-        <a href="#install" style="color:var(--muted);">Install</a>
-        <a href="#faq" style="color:var(--muted);">FAQ</a>
+  <header class="hero" id="top">
+    <nav class="mac-menu" aria-label="macOS desktop menu">
+      <div class="mac-menu-left">
+        <svg class="mac-apple" viewBox="0 0 24 29" aria-hidden="true"><path d="M19.6 15.4c0-3.6 3-5.3 3.2-5.4a7 7 0 0 0-5.5-3c-2.3-.2-4.6 1.4-5.5 1.4-.9 0-3-1.4-4.9-1.3a7.2 7.2 0 0 0-6.1 3.7c-2.6 4.5-.7 11.2 1.8 14.9 1.3 1.8 2.7 3.8 4.7 3.7 1.9-.1 2.6-1.2 4.9-1.2s2.9 1.2 4.9 1.2c2-.1 3.3-1.8 4.5-3.7a16 16 0 0 0 2-4.2 6.2 6.2 0 0 1-4-6.1ZM15.8 4.6A6.2 6.2 0 0 0 17.3 0a6.4 6.4 0 0 0-4.2 2.2 5.9 5.9 0 0 0-1.5 4.4 5.3 5.3 0 0 0 4.2-2Z"/></svg>
+        <span class="menu-app">Chimlo</span>
+        <span class="menu-label" aria-hidden="true">File</span>
+        <span class="menu-label" aria-hidden="true">Edit</span>
+        <span class="menu-label" aria-hidden="true">View</span>
+        <span class="menu-label optional" aria-hidden="true">Window</span>
+        <span class="menu-label optional" aria-hidden="true">Help</span>
       </div>
-      <span style="width:1px; height:20px; background:var(--line2);"></span>
-      <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:14px; color:var(--muted);" style-hover="color:var(--ink);">GitHub ↗</a>
-      <a href="https://github.com/kraten/chimlo/releases/download/v0.1.0/Chimlo-v0.1.0.dmg" target="_blank" rel="noopener" style="font-size:13.5px; font-weight:600; color:#08130a; background:var(--green); padding:8px 15px; border-radius:8px;" style-hover="background:oklch(0.9 0.16 145);">Download</a>
+      <div class="mac-menu-right">
+        <a class="github-menu-link" href="https://github.com/kraten/chimlo" aria-label="View Chimlo on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.58-.29-5.29-1.29-5.29-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18A11 11 0 0 1 12 6.06a11 11 0 0 1 2.89.39c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.72 5.39-5.3 5.68.42.36.79 1.06.79 2.14v3.29c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+          <span>View on GitHub</span>
+        </a>
+        <svg class="menu-status" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 12.5h2.3l3.2 3V4.5l-3.2 3H3Z"/><path d="M11.5 7.4a4 4 0 0 1 0 5.2M14 5a7.2 7.2 0 0 1 0 10"/></svg>
+        <svg class="menu-status" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 7.5c4.5-4.1 10.5-4.1 15 0M5.3 10.3c2.8-2.5 6.6-2.5 9.4 0M8.2 13.2c1.1-1 2.5-1 3.6 0"/><circle cx="10" cy="16" r=".8" fill="currentColor" stroke="none"/></svg>
+        <span class="menu-clock" id="menuClock">Sun 9:41 PM</span>
+      </div>
     </nav>
+
+    <div class="desktop-file" aria-hidden="true">
+      <img src="assets/chimlo-icon.png" alt="">
+      <span>Chimlo</span>
+    </div>
+
+    <div class="chimlo" id="chimloDemo" data-view="sessions" aria-label="Interactive Chimlo notch demo">
+      <button class="compact-hit" id="compactHit" type="button" aria-label="Open Chimlo"></button>
+      <div class="compact-island" aria-hidden="true">
+        <div class="compact-wing"><svg class="sprite" data-sprite="working" data-palette="codex" viewBox="0 0 12 12"></svg></div>
+        <div class="compact-camera"></div>
+        <div class="compact-wing"><span class="compact-count">2</span></div>
+      </div>
+
+      <div class="expanded-island">
+        <div class="island-status">
+          <button class="capacity-button" id="capacityButton" type="button" aria-label="Show provider usage">
+            <span class="provider-mini codex">
+              <svg class="provider-logo" viewBox="0 0 24 24" aria-hidden="true"><use href="#openai-logo"></use></svg>
+              <span class="segments" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="off"></i></span>
+              <span class="provider-percent">89%</span>
+            </span>
+            <span class="provider-mini claude">
+              <svg class="provider-logo" viewBox="0 0 24 24" aria-hidden="true"><use href="#claude-logo"></use></svg>
+              <span class="segments" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="off"></i></span>
+              <span class="provider-percent">90%</span>
+            </span>
+          </button>
+          <div class="island-tools">
+            <button class="island-tool" type="button" aria-label="Mute Chimlo sounds" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.1-.9a5.5 5.5 0 0 1 0 7.8l1.4 1.4a7.5 7.5 0 0 0 0-10.6l-1.4 1.4Z"/></svg>
+            </button>
+            <a class="island-tool" href="https://github.com/kraten/chimlo#configuration" aria-label="Open Chimlo settings documentation">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19.1 13 .1-1-.1-1 2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.7-1L14.7 3h-4l-.4 3a8 8 0 0 0-1.7 1L6.2 6 4.1 9.5l2 1.5-.1 1 .1 1-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3.1h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5ZM12.6 15.6a3.7 3.7 0 1 1-1.2-7.2 3.7 3.7 0 0 1 1.2 7.2Z"/></svg>
+            </a>
+            <button class="island-tool close-tool" id="closeIsland" type="button" aria-label="Close Chimlo">×</button>
+          </div>
+        </div>
+
+        <div class="island-body">
+          <div class="session-list" data-panel="sessions">
+            <div class="session-row">
+              <svg class="sprite large" data-sprite="working" data-palette="codex" viewBox="0 0 12 12" aria-label="Codex working"></svg>
+              <div class="session-copy">
+                <div class="session-title-line">
+                  <span class="session-title">Trace the webhook timeout</span>
+                  <svg class="jump-mark" viewBox="0 0 8 8" aria-hidden="true"><path fill="currentColor" d="M1 1h6v2H5v1H4v1H3v2H1V5h2V4h1V3H1z"/></svg>
+                </div>
+                <div class="session-prompt"><b>You:</b> Can you verify the release build?</div>
+                <div class="session-meta"><span class="meta-badge">Codex</span><span class="meta-badge">5.6 Sol</span></div>
+              </div>
+              <span class="time-badge">&lt;1m</span>
+            </div>
+            <div class="session-row">
+              <svg class="sprite large" data-sprite="working" data-palette="claude" viewBox="0 0 12 12" aria-label="Claude working"></svg>
+              <div class="session-copy">
+                <div class="session-title-line">
+                  <span class="session-title">Review the release build</span>
+                  <svg class="jump-mark" viewBox="0 0 8 8" aria-hidden="true"><path fill="currentColor" d="M1 1h6v2H5v1H4v1H3v2H1V5h2V4h1V3H1z"/></svg>
+                </div>
+                <div class="session-prompt"><b>You:</b> Check the package before launch.</div>
+                <div class="session-meta"><span class="meta-badge">Claude</span><span class="meta-badge">Opus 4.1</span></div>
+              </div>
+              <span class="time-badge">2m</span>
+            </div>
+          </div>
+
+          <div class="usage-panel" data-panel="usage">
+            <div class="usage-provider codex">
+              <div class="usage-provider-head">
+                <svg class="provider-logo" viewBox="0 0 24 24" aria-hidden="true"><use href="#openai-logo"></use></svg>
+                <span>Codex</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">7D</span>
+                <span class="usage-gauge"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></span>
+                <span class="usage-number">89%</span>
+                <span class="usage-reset">Thu</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">PACE</span>
+                <span class="usage-gauge"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+                <span class="usage-number">71%</span>
+                <span class="usage-reset">Good</span>
+              </div>
+            </div>
+            <span class="usage-divider" aria-hidden="true"></span>
+            <div class="usage-provider claude">
+              <div class="usage-provider-head">
+                <svg class="provider-logo" viewBox="0 0 24 24" aria-hidden="true"><use href="#claude-logo"></use></svg>
+                <span>Claude</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">7D</span>
+                <span class="usage-gauge"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></span>
+                <span class="usage-number">90%</span>
+                <span class="usage-reset">Tue</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">5H</span>
+                <span class="usage-gauge"><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span>
+                <span class="usage-number">63%</span>
+                <span class="usage-reset">1h 42m</span>
+              </div>
+            </div>
+          </div>
+
+          <div data-panel="permission">
+            <div class="permission-panel">
+              <div class="permission-head">
+                <svg class="warning-glyph" viewBox="0 0 15 15" aria-hidden="true"><path fill="currentColor" d="M6 1h3v2h2v2h2v7h-2v2H4v-2H2V5h2V3h2Zm1 4v4h1V5Zm0 6v1h1v-1Z"/></svg>
+                <div><div class="permission-tool">Bash</div><div class="permission-kind">Claude permission</div></div>
+              </div>
+              <p class="permission-prompt">Run the release verification?</p>
+              <p class="permission-detail">Claude wants to run a local command in this project.</p>
+              <div class="permission-preview">swift test &amp;&amp; ./scripts/package-app.sh</div>
+              <div class="permission-actions">
+                <button class="permission-action deny" data-decision="denied" type="button">Deny</button>
+                <button class="permission-action once" data-decision="allowed" type="button">Allow Once</button>
+                <button class="permission-action always" data-decision="allowed" type="button">Allow All</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="done-panel" data-panel="done">
+            <svg class="sprite large" data-sprite="success" data-palette="codex" viewBox="0 0 12 12" aria-hidden="true"></svg>
+            <div><strong id="doneTitle">Permission sent to Claude</strong><span id="doneDetail">The agent keeps working. Chimlo gets out of the way.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-copy">
+      <h1><span class="desktop-title">Your coding agents, <span>live in the notch.</span></span><span class="mobile-title">Agents, <span>live in your notch.</span></span></h1>
+      <p>Chimlo turns the space around your MacBook camera into a live home for Codex and Claude Code.</p>
+      <a class="hero-action" href="https://github.com/kraten/chimlo/releases/download/v0.1.0/Chimlo-v0.1.0.dmg">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16.5 6.5 11l1.4-1.4 3.1 3.1V3h2v9.7l3.1-3.1 1.4 1.4-5.5 5.5ZM5 20v-2h14v2H5Z"/></svg>
+        Download for macOS
+      </a>
+      <span class="hero-meta">v0.1.0 · macOS 15+</span>
+      <a class="hero-github" href="https://github.com/kraten/chimlo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.58-.29-5.29-1.29-5.29-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18A11 11 0 0 1 12 6.06a11 11 0 0 1 2.89.39c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.72 5.39-5.3 5.68.42.36.79 1.06.79 2.14v3.29c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <div class="dock" aria-hidden="true">
+      <span class="dock-icon dock-folder"></span>
+      <span class="dock-icon dock-terminal">&gt;_</span>
+      <span class="dock-icon dock-calendar"><small>JUL</small>26</span>
+      <span class="dock-icon dock-running"><img src="assets/chimlo-icon.png" alt=""></span>
+    </div>
+
+    <div class="demo-controls">
+      <span class="demo-state" id="demoState">Live sessions</span>
+      <button class="replay" id="replayDemo" type="button">Replay demo</button>
+    </div>
+
+    <div class="mac-pointer is-hidden" id="demoPointer" aria-hidden="true">
+      <svg viewBox="0 0 24 32"><path d="M2.1 1.2v23.3l5.6-5.4 4.2 10.2 4.1-1.8-4.3-9.9h7.9L2.1 1.2Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </div>
   </header>
 
-  <!-- HERO -->
-  <section id="top" style="max-width:1080px; margin:0 auto; padding:96px 24px 76px; display:flex; flex-wrap:wrap; gap:60px; align-items:center;">
-    <div style="flex:1 1 400px; min-width:300px;">
-      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.18em; text-transform:uppercase; color:var(--green); margin-bottom:24px;">macOS 14+ · Free &amp; open source</div>
-      <h1 style="font-weight:800; font-size:clamp(46px, 6.6vw, 78px); line-height:0.98; letter-spacing:-0.035em; margin:0 0 24px;">Your coding agents, live in the notch.</h1>
-      <p style="font-size:17px; line-height:1.62; color:var(--muted); max-width:470px; margin:0 0 36px; text-wrap:pretty;">Chimlo keeps Codex and Claude Code sessions in your MacBook notch. See what is working or waiting, answer Claude Code questions, and approve its tool requests without leaving your editor.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:22px; align-items:center;">
-        <a href="https://github.com/kraten/chimlo/releases/download/v0.1.0/Chimlo-v0.1.0.dmg" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:10px; padding:15px 24px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#08130a" aria-hidden="true"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 17.4 6.3 11.7l1.4-1.4L11 13.6V3zM5 19h14v2H5z"/></svg>
-          Download for Mac
-        </a>
-        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">View on GitHub ↗</a>
+  <main id="content">
+    <section class="actual-ui" id="interface">
+      <div class="section-shell actual-layout">
+        <div class="actual-head">
+          <h2><span class="actual-desktop-title">Keep working. <span>Chimlo keeps watch.</span></span><span class="actual-mobile-title">Stay in flow.</span></h2>
+          <p>See what every agent is doing, answer Claude when it gets blocked, and return only when your attention is worth spending.</p>
+        </div>
+        <div class="product-shot">
+          <img src="assets/social-preview.png" width="1774" height="887" loading="lazy" alt="Chimlo showing live Codex and Claude sessions, provider usage, and finished work in the MacBook notch">
+        </div>
+        <div class="utility-list" aria-label="What Chimlo helps you do">
+          <div class="utility-item"><strong>Follow live work</strong><p>See the task, latest prompt, model, and recency without opening another window.</p></div>
+          <div class="utility-item"><strong>Handle the handoff</strong><p>Claude questions and permissions stay anchored until you respond.</p></div>
+          <div class="utility-item"><strong>Return at the right moment</strong><p>Open the finished session when the agent is ready for you, not before.</p></div>
+        </div>
       </div>
-      <p style="font-family:'JetBrains Mono'; font-size:12px; color:var(--dim); margin:26px 0 0;">Apple Silicon · under 100 MB RAM · auto-updating</p>
-    </div>
+    </section>
 
-    <!-- PRODUCT PANEL -->
-    <div style="flex:1 1 460px; min-width:320px; position:relative; display:flex; justify-content:center;">
-      <div style="position:absolute; width:82%; height:78%; top:8%; left:9%; background:radial-gradient(circle, oklch(0.83 0.16 145 / 0.28), transparent 68%); filter:blur(56px); z-index:0;"></div>
-      <div style="position:relative; z-index:1; width:100%; max-width:520px;">
-        <div style="position:relative; background:var(--panel); border:1px solid var(--line2); border-radius:22px; box-shadow:0 40px 80px -28px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.02) inset;">
-          <div style="position:absolute; top:-1px; left:50%; transform:translateX(-50%); width:130px; height:20px; background:var(--panel); border:1px solid var(--line2); border-top:none; border-radius:0 0 13px 13px; z-index:4;"></div>
+    <section class="states" id="states">
+      <div class="section-shell">
+        <div class="states-intro">
+          <h2>It appears when the work changes.</h2>
+          <p>Chimlo stays quiet while agents work, holds attention when they need you, and gives the space back when they are done.</p>
+        </div>
 
-          <!-- capacity header -->
-          <div style="display:flex; align-items:center; gap:16px; padding:16px 17px 13px;">
-            <div style="display:flex; align-items:center; gap:7px;">
-              <span style="width:15px; height:15px; border-radius:4px; display:grid; place-items:center; background:oklch(0.68 0.15 250 / 0.2); color:var(--codex); font-size:9px;">◆</span>
-              <div style="display:flex; gap:2px; align-items:flex-end;">
-                <span style="width:3px; height:6px; border-radius:1px; background:var(--codex);"></span>
-                <span style="width:3px; height:8px; border-radius:1px; background:var(--codex);"></span>
-                <span style="width:3px; height:10px; border-radius:1px; background:var(--codex);"></span>
-                <span style="width:3px; height:12px; border-radius:1px; background:var(--codex);"></span>
-                <span style="width:3px; height:13px; border-radius:1px; background:oklch(0.42 0.04 250 / 0.6);"></span>
-              </div>
-              <span style="font-family:'JetBrains Mono'; font-size:11px; font-weight:600; color:var(--codex);">89%</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:7px;">
-              <span style="width:15px; height:15px; border-radius:4px; display:grid; place-items:center; background:oklch(0.75 0.15 55 / 0.2); color:var(--claude); font-size:10px;">✳</span>
-              <div style="display:flex; gap:2px; align-items:flex-end;">
-                <span style="width:3px; height:6px; border-radius:1px; background:var(--claude);"></span>
-                <span style="width:3px; height:8px; border-radius:1px; background:var(--claude);"></span>
-                <span style="width:3px; height:10px; border-radius:1px; background:var(--claude);"></span>
-                <span style="width:3px; height:12px; border-radius:1px; background:var(--claude);"></span>
-                <span style="width:3px; height:13px; border-radius:1px; background:oklch(0.47 0.05 55 / 0.6);"></span>
-              </div>
-              <span style="font-family:'JetBrains Mono'; font-size:11px; font-weight:600; color:var(--claude);">90%</span>
-            </div>
-            <span style="flex:1;"></span>
-            <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="var(--muted)"/><path d="M16.5 8.5a5 5 0 010 7" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h18M3 16h18"/><circle cx="9" cy="8" r="2.3" fill="var(--muted)" stroke="none"/><circle cx="15" cy="16" r="2.3" fill="var(--muted)" stroke="none"/></svg>
+        <div class="state-stage">
+          <div class="state-tabs" role="tablist" aria-label="Chimlo activity states">
+            <button class="state-tab" id="tab-working" role="tab" aria-selected="false" aria-controls="state-working" data-state="working" type="button"><strong>Working</strong><span>Follow progress</span></button>
+            <button class="state-tab" id="tab-needs" role="tab" aria-selected="true" aria-controls="state-needs" data-state="needs" type="button"><strong>Needs you</strong><span>Answer in place</span></button>
+            <button class="state-tab" id="tab-done" role="tab" aria-selected="false" aria-controls="state-finished" data-state="finished" type="button"><strong>Done</strong><span>Jump back in</span></button>
           </div>
-
-          <!-- sessions -->
-          <sc-for list="{{ sessions }}" as="row" hint-placeholder-count="4">
-            <div style="padding:13px 16px; border-top:1px solid var(--line);">
-              <div style="display:flex; align-items:flex-start; gap:11px;">
-                <div style="flex-shrink:0; margin-top:1px; animation:chBob 2.8s ease-in-out infinite;">{{ row.comp }}</div>
-                <div style="flex:1; min-width:0;">
-                  <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="font-size:13.5px; font-weight:600; color:#eef3e8;">{{ row.title }}</span>
-                    <span style="color:var(--dim); font-size:12px;">↗</span>
+          <div class="state-canvas">
+            <div>
+              <div class="native-surface">
+                <div class="native-top">
+                  <div class="provider-mini claude">
+                    <svg class="provider-logo" viewBox="0 0 24 24" aria-hidden="true"><use href="#claude-logo"></use></svg>
+                    <span class="segments" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="off"></i></span>
+                    <span class="provider-percent">90%</span>
                   </div>
-                  <div style="font-family:'JetBrains Mono'; font-size:10.5px; color:var(--muted); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--dim);">You:</span> {{ row.you }}</div>
+                  <div class="island-tools">
+                    <span class="island-tool" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.1-.9a5.5 5.5 0 0 1 0 7.8l1.4 1.4a7.5 7.5 0 0 0 0-10.6l-1.4 1.4Z"/></svg></span>
+                    <span class="island-tool" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m19.1 13 .1-1-.1-1 2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.7-1L14.7 3h-4l-.4 3a8 8 0 0 0-1.7 1L6.2 6 4.1 9.5l2 1.5-.1 1 .1 1-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3.1h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5ZM12.6 15.6a3.7 3.7 0 1 1-1.2-7.2 3.7 3.7 0 0 1 1.2 7.2Z"/></svg></span>
+                  </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
-                  <span style="font-family:'JetBrains Mono'; font-size:10px; font-weight:600; padding:3px 8px; border-radius:6px; background:{{ row.badge }}; color:{{ row.color }};">{{ row.agent }}</span>
-                  <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); padding:3px 8px; border-radius:6px; border:1px solid var(--line); white-space:nowrap;">{{ row.model }}</span>
-                  <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); padding:3px 8px; border-radius:6px; border:1px solid var(--line); white-space:nowrap;">{{ row.time }}</span>
+                <div class="native-panel">
+                  <div class="native-state" id="state-working" role="tabpanel" aria-labelledby="tab-working">
+                    <div class="native-status-row">
+                      <svg class="sprite large" data-sprite="working" data-palette="claude" viewBox="0 0 12 12" aria-hidden="true"></svg>
+                      <div><strong>Reviewing the release build</strong><p>Claude is reading the package manifest and checking the signed app.</p></div>
+                    </div>
+                  </div>
+                  <div class="native-state is-current" id="state-needs" role="tabpanel" aria-labelledby="tab-needs">
+                    <div class="permission-panel">
+                      <div class="permission-head">
+                        <svg class="warning-glyph" viewBox="0 0 15 15" aria-hidden="true"><path fill="currentColor" d="M6 1h3v2h2v2h2v7h-2v2H4v-2H2V5h2V3h2Zm1 4v4h1V5Zm0 6v1h1v-1Z"/></svg>
+                        <div><div class="permission-tool">Bash</div><div class="permission-kind">Claude permission</div></div>
+                      </div>
+                      <p class="permission-prompt">Run the release verification?</p>
+                      <p class="permission-detail">Claude wants to run a local command in this project.</p>
+                      <div class="permission-preview">swift test &amp;&amp; ./scripts/package-app.sh</div>
+                      <div class="permission-actions">
+                        <button class="permission-action deny" type="button">Deny</button>
+                        <button class="permission-action once" type="button">Allow Once</button>
+                        <button class="permission-action always" type="button">Allow All</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="native-state" id="state-finished" role="tabpanel" aria-labelledby="tab-done">
+                    <div class="native-status-row">
+                      <svg class="sprite large" data-sprite="success" data-palette="codex" viewBox="0 0 12 12" aria-hidden="true"></svg>
+                      <div><strong>Release build verified</strong><p>Open the finished Codex session directly from the notch.</p></div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <sc-if value="{{ row.active }}" hint-placeholder-val="{{ true }}">
-                <div style="margin-top:11px;" key="{{ scene }}">
-                    <sc-if value="{{ isWorking }}" hint-placeholder-val="{{ true }}">
-                      <div style="background:#0d110a; border:1px solid var(--line2); border-radius:10px; padding:10px 12px; animation:chFade .4s ease both;">
-                        <div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--muted); line-height:1.6;"><span style="color:var(--codex);">Chimlo:</span> Running checks<span style="width:6px; height:12px; background:var(--codex); display:inline-block; vertical-align:-2px; margin-left:3px; animation:chCaret 1s step-end infinite;"></span></div>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
-                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.09 148 / 0.4); border-radius:10px; padding:10px 12px; animation:chFade .4s ease both;">
-                        <div style="font-family:'JetBrains Mono'; font-size:11px; color:#dfe6d5; line-height:1.6;"><span style="color:var(--green);">Chimlo:</span> All checks passed. <span style="color:var(--green);">Ready to ship ✓</span></div>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ isQuestion }}" hint-placeholder-val="{{ false }}">
-                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.13 55 / 0.4); border-radius:10px; padding:11px 12px; animation:chFade .4s ease both;">
-                        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:8px;">CHIMLO ASKS</div>
-                        <div style="font-size:12px; color:#eaf0e2; margin-bottom:9px;">Ship to production now?</div>
-                        <div style="display:flex; gap:7px;">
-                          <div style="flex:1; font-size:11px; color:#f2e6d6; padding:7px 9px; background:oklch(0.75 0.15 55 / 0.14); border:1px solid oklch(0.5 0.13 55 / 0.45); border-radius:7px; display:flex; align-items:center; gap:6px;"><kbd style="font-family:'JetBrains Mono'; font-size:9px; color:var(--claude); border:1px solid oklch(0.5 0.13 55 / 0.5); border-radius:4px; padding:1px 4px;">⌘1</kbd> Ship now</div>
-                          <div style="flex:1; font-size:11px; color:#dfe6d5; padding:7px 9px; background:#151a12; border:1px solid var(--line2); border-radius:7px; display:flex; align-items:center; gap:6px;"><kbd style="font-family:'JetBrains Mono'; font-size:9px; color:var(--muted); border:1px solid var(--line2); border-radius:4px; padding:1px 4px;">⌘2</kbd> Hold</div>
-                        </div>
-                      </div>
-                    </sc-if>
-                    <sc-if value="{{ isApproval }}" hint-placeholder-val="{{ false }}">
-                      <div style="background:#0d110a; border:1px solid oklch(0.5 0.13 55 / 0.4); border-radius:10px; padding:11px 12px; animation:chFade .4s ease both;">
-                        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:8px;">⚠ PERMISSION REQUEST</div>
-                        <div style="font-size:12px; color:#eaf0e2; margin-bottom:10px;">Run <code style="font-family:'JetBrains Mono'; font-size:11px; color:var(--claude); background:var(--panel); padding:1px 5px; border-radius:4px;">git push origin main</code></div>
-                        <div style="display:flex; gap:7px;">
-                          <div style="flex:1; text-align:center; font-size:11px; color:var(--muted); padding:7px; border:1px solid var(--line2); border-radius:7px;">Deny <kbd style="font-family:'JetBrains Mono'; font-size:9px;">⌘N</kbd></div>
-                          <div style="flex:1; text-align:center; font-size:11px; font-weight:600; color:#08130a; padding:7px; background:var(--green); border-radius:7px;">Allow <kbd style="font-family:'JetBrains Mono'; font-size:9px;">⌘Y</kbd></div>
-                        </div>
-                      </div>
-                    </sc-if>
-                </div>
-              </sc-if>
+              <p class="state-caption" id="stateCaption">A Claude permission stays anchored until you answer. No terminal hunt, no modal window.</p>
             </div>
-          </sc-for>
-        </div>
-        <div style="display:flex; justify-content:center; gap:9px; margin-top:18px;">
-          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="4">
-            <button onClick="{{ d.go }}" title="{{ d.label }}" style="width:8px; height:8px; padding:0; border:none; cursor:pointer; border-radius:50%; background:{{ d.color }};"></button>
-          </sc-for>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- RUNS WITH -->
-  <section style="max-width:1080px; margin:0 auto; padding:0 24px;">
-    <div style="border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:26px 0; display:flex; flex-wrap:wrap; align-items:center; gap:20px 28px;">
-      <span style="font-family:'JetBrains Mono'; font-size:11px; letter-spacing:0.16em; color:var(--dim); white-space:nowrap;">WORKS WITH THE AGENTS YOU ALREADY RUN</span>
-      <span style="flex:1;"></span>
-      <div style="display:flex; flex-wrap:wrap; gap:12px;">
-        <div style="display:flex; align-items:center; gap:11px; padding:10px 16px 10px 12px; border:1px solid var(--line2); border-radius:11px; background:var(--bg2);">
-          <span style="width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:oklch(0.68 0.15 250 / 0.16); color:var(--codex); font-size:12px;">◆</span>
-          <div style="display:flex; flex-direction:column; line-height:1.2;">
-            <span style="font-size:14px; font-weight:600; color:var(--ink);">Codex</span>
-            <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">OpenAI</span>
-          </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:11px; padding:10px 16px 10px 12px; border:1px solid var(--line2); border-radius:11px; background:var(--bg2);">
-          <span style="width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:oklch(0.75 0.15 55 / 0.16); color:var(--claude); font-size:13px;">✳</span>
-          <div style="display:flex; flex-direction:column; line-height:1.2;">
-            <span style="font-size:14px; font-weight:600; color:var(--ink);">Claude Code</span>
-            <span style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">Anthropic</span>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- FEATURES -->
-  <section id="features" style="max-width:1080px; margin:0 auto; padding:100px 24px;">
-    <div style="max-width:620px; margin-bottom:48px;">
-      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">FEATURES</div>
-      <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,48px); line-height:1.04; letter-spacing:-0.025em; margin:0 0 16px;">Know when an agent needs you.</h2>
-      <p style="color:var(--muted); font-size:16px; line-height:1.6; margin:0;">Long-running agents shouldn't make you babysit a terminal. Chimlo keeps active work at the top of your screen and opens there when Claude Code needs an answer.</p>
-    </div>
-
-    <!-- showcase -->
-    <div style="border:1px solid var(--line2); border-radius:20px; background:var(--bg2); padding:clamp(28px,4vw,46px); display:flex; flex-wrap:wrap; gap:44px; align-items:center; margin-bottom:8px;">
-      <div style="flex:1 1 320px; min-width:280px;">
-        <div style="font-family:'JetBrains Mono'; font-size:11px; letter-spacing:0.14em; color:var(--green); margin-bottom:14px;">WHEN CLAUDE WAITS</div>
-        <h3 style="font-weight:700; font-size:clamp(24px,3vw,32px); line-height:1.1; letter-spacing:-0.02em; margin:0 0 14px;">Answer Claude Code without leaving your editor.</h3>
-        <p style="color:var(--muted); font-size:15px; line-height:1.65; margin:0 0 16px;">When Claude Code asks a question or requests permission to use a tool, Chimlo opens the real choices in the notch. Answer, deny, allow once, or allow for the session.</p>
-        <p style="font-family:'JetBrains Mono'; font-size:12.5px; color:var(--dim); margin:0;">A timeout never counts as approval.</p>
-      </div>
-      <div style="flex:1 1 300px; min-width:260px; background:var(--panel); border:1px solid var(--line2); border-radius:14px; padding:18px;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-          <div>{{ companionAsk }}</div>
-          <div>
-            <div style="font-size:13.5px; font-weight:600; color:#eef3e8;">Review the release build</div>
-            <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--dim);">Claude · waiting for you</div>
-          </div>
+    <section class="ownership" id="local">
+      <div class="section-shell">
+        <p class="ownership-line">A Mac app, not another <span>agent cloud.</span></p>
+        <div class="ownership-facts">
+          <div><strong>Your sessions stay yours.</strong><p>Chimlo reads local agent activity. It does not proxy prompts through a hosted service.</p></div>
+          <div><strong>No account to create.</strong><p>Install the app, connect the tools you already use, and keep working.</p></div>
+          <div><strong>Open source by default.</strong><p>The code is public under GPL-3.0, including the UI you see here.</p></div>
         </div>
-        <div style="font-family:'JetBrains Mono'; font-size:9.5px; color:var(--claude); letter-spacing:0.08em; margin-bottom:9px;">CHIMLO ASKS</div>
-        <div style="font-size:14px; color:#eaf0e2; margin-bottom:13px;">Ship to production now?</div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#f2e6d6; padding:10px 12px; background:oklch(0.75 0.15 55 / 0.14); border:1px solid oklch(0.5 0.13 55 / 0.45); border-radius:9px;"><kbd style="font-family:'JetBrains Mono'; font-size:10px; color:var(--claude); border:1px solid oklch(0.5 0.13 55 / 0.5); border-radius:4px; padding:1px 5px;">⌘1</kbd> Ship it now</div>
-          <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:#dfe6d5; padding:10px 12px; background:var(--bg); border:1px solid var(--line2); border-radius:9px;"><kbd style="font-family:'JetBrains Mono'; font-size:10px; color:var(--muted); border:1px solid var(--line2); border-radius:4px; padding:1px 5px;">⌘2</kbd> Hold for review</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- index list -->
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); column-gap:52px;">
-      <sc-for list="{{ features }}" as="f" hint-placeholder-count="8">
-        <div style="display:flex; gap:20px; padding:26px 0; border-top:1px solid var(--line);">
-          <span style="font-family:'JetBrains Mono'; font-size:13px; color:var(--green); flex-shrink:0; padding-top:3px;">{{ f.n }}</span>
-          <div>
-            <h3 style="font-weight:600; font-size:18px; letter-spacing:-0.01em; margin:0 0 7px; color:var(--ink);">{{ f.title }}</h3>
-            <p style="font-size:14px; line-height:1.6; color:var(--muted); margin:0;">{{ f.body }}</p>
-          </div>
-        </div>
-      </sc-for>
-    </div>
-  </section>
-
-  <!-- PRIVACY -->
-  <section style="border-top:1px solid var(--line);">
-    <div style="max-width:1080px; margin:0 auto; padding:100px 24px; display:flex; flex-wrap:wrap; gap:56px; align-items:flex-start;">
-      <div style="flex:1 1 420px; min-width:300px;">
-        <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">LOCAL BY DESIGN</div>
-        <h2 style="font-weight:800; font-size:clamp(32px,4.8vw,56px); line-height:1.0; letter-spacing:-0.03em; margin:0;">Your agent data stays<br>on your Mac.</h2>
-      </div>
-      <div style="flex:1 1 340px; min-width:280px;">
-        <p style="color:var(--muted); font-size:16px; line-height:1.65; margin:0 0 24px;">Chimlo reads local session metadata. Claude Code questions and permission details stay in memory only while they are on screen.</p>
-        <div style="display:flex; flex-direction:column; gap:16px;">
-          <sc-for list="{{ privacy }}" as="p" hint-placeholder-count="4">
-            <div style="display:flex; gap:13px; align-items:flex-start; border-top:1px solid var(--line); padding-top:16px;">
-              <span style="color:var(--green); font-size:13px; margin-top:2px;">✓</span>
-              <span style="font-size:14.5px; line-height:1.55; color:#d6dece;">{{ p }}</span>
-            </div>
-          </sc-for>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- INSTALL -->
-  <section id="install" style="border-top:1px solid var(--line);">
-    <div style="max-width:1080px; margin:0 auto; padding:100px 24px; text-align:center;">
-      <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">INSTALL</div>
-      <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,48px); line-height:1.04; letter-spacing:-0.025em; margin:0 0 16px;">Drag Chimlo to Applications.</h2>
-      <p style="color:var(--muted); font-size:16px; line-height:1.6; max-width:480px; margin:0 auto 32px;">Download the DMG and drag Chimlo to Applications. Chimlo is not yet notarized, so macOS may ask you to use Open Anyway on first launch.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:22px; justify-content:center; align-items:center;">
-        <a href="https://github.com/kraten/chimlo/releases/download/v0.1.0/Chimlo-v0.1.0.dmg" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:10px; padding:15px 24px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#08130a" aria-hidden="true"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 17.4 6.3 11.7l1.4-1.4L11 13.6V3zM5 19h14v2H5z"/></svg>
-          Download Chimlo.dmg
+        <a class="ownership-action" href="https://github.com/kraten/chimlo">
+          Read the source on GitHub
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h9v9h-2V5.4L3.7 13.7l-1.4-1.4L10.6 4H5V2Z"/></svg>
         </a>
-        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">Build from source ↗</a>
       </div>
-      <p style="font-family:'JetBrains Mono'; font-size:12px; color:var(--dim); margin:26px 0 0;">macOS 14+ · Apple Silicon · GPL-3.0</p>
-    </div>
-  </section>
+    </section>
 
-  <!-- FAQ -->
-  <section id="faq" style="border-top:1px solid var(--line);">
-    <div style="max-width:820px; margin:0 auto; padding:100px 24px;">
-      <div style="margin-bottom:40px;">
-        <div style="font-family:'JetBrains Mono'; font-size:12px; letter-spacing:0.16em; color:var(--green); margin-bottom:18px;">FAQ</div>
-        <h2 style="font-weight:700; font-size:clamp(30px,4.2vw,44px); letter-spacing:-0.025em; margin:0;">Before you install.</h2>
-      </div>
-      <div>
-        <sc-for list="{{ faqs }}" as="q" hint-placeholder-count="6">
-          <div style="border-top:1px solid var(--line);">
-            <button onClick="{{ q.toggle }}" style="width:100%; text-align:left; background:none; border:none; cursor:pointer; padding:22px 0; display:flex; align-items:center; gap:16px; color:var(--ink); font-family:'Space Grotesk'; font-size:16px; font-weight:500;">
-              <span style="flex:1;">{{ q.q }}</span>
-              <span style="color:var(--green); font-size:20px; font-family:'JetBrains Mono';">{{ q.sign }}</span>
-            </button>
-            <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
-              <div style="padding:0 40px 24px 0; font-size:14.5px; line-height:1.7; color:var(--muted);">{{ q.a }}</div>
-            </sc-if>
-          </div>
-        </sc-for>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA -->
-  <section style="border-top:1px solid var(--line);">
-    <div style="max-width:1080px; margin:0 auto; padding:92px 24px 104px; text-align:center;">
-      <div style="display:flex; justify-content:center; margin-bottom:26px;"><div style="animation:chBob 2.4s ease-in-out infinite;">{{ companionHero }}</div></div>
-      <h2 style="font-weight:800; font-size:clamp(34px,5.2vw,62px); line-height:1.0; letter-spacing:-0.03em; margin:0 0 16px;">Put your agents in the notch.</h2>
-      <p style="color:var(--muted); font-size:16px; line-height:1.6; max-width:440px; margin:0 auto 32px;">Download Chimlo for macOS 14+, or inspect every line on GitHub.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center; align-items:center;">
-        <a href="https://github.com/kraten/chimlo/releases/download/v0.1.0/Chimlo-v0.1.0.dmg" target="_blank" rel="noopener" style="padding:15px 26px; background:var(--green); color:#08130a; border-radius:10px; font-weight:600; font-size:15px;" style-hover="background:oklch(0.9 0.16 145);">Download for Mac</a>
-        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="font-size:15px; font-weight:500; color:var(--ink); border-bottom:1px solid var(--line2); padding-bottom:2px;" style-hover="border-color:var(--green); color:var(--green);">View on GitHub ↗</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
-  <footer style="border-top:1px solid var(--line); background:var(--bg2);">
-    <div style="max-width:1080px; margin:0 auto; padding:40px 24px; display:flex; flex-wrap:wrap; gap:24px; align-items:center;">
-      <div style="display:flex; align-items:center; gap:11px;">
-        <img src="../.github/chimlo-icon.png" alt="Chimlo" width="44" height="44" style="border-radius:11px; display:block;">
-        <div style="display:flex; flex-direction:column;">
-          <span style="font-family:'Bricolage Grotesque'; font-weight:700; font-size:16px;">Chimlo</span>
-          <span style="font-size:11.5px; color:var(--dim);">macOS activity island for coding agents</span>
+    <section class="questions" id="questions">
+      <div class="section-shell questions-layout">
+        <h2>The useful details.</h2>
+        <div>
+          <details class="faq-item">
+            <summary>Which agents does Chimlo support?</summary>
+            <p>Chimlo currently watches Codex and Claude Code sessions on your Mac. Their activity, questions, and completion states appear in the notch.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can Chimlo approve every agent action?</summary>
+            <p>No. Claude Code questions and tool permissions can be handled in Chimlo. Codex approvals remain in Codex, while Chimlo shows the session state and takes you back to it.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Does it use my credentials or estimate usage?</summary>
+            <p>No. Chimlo does not read private tokens, cookies, Keychain items, or fabricate usage from token estimates. If a provider cannot report a value, Chimlo shows it as unavailable.</p>
+          </details>
+          <details class="faq-item">
+            <summary>What does it require?</summary>
+            <p>Chimlo 0.1.0 supports macOS 15 or later. A MacBook notch is the intended home, with a fallback floating island on Macs without one.</p>
+          </details>
         </div>
       </div>
-      <span style="flex:1;"></span>
-      <div style="display:flex; flex-wrap:wrap; gap:22px; font-size:13.5px;">
-        <a href="https://github.com/kraten/chimlo" target="_blank" rel="noopener" style="color:var(--muted);">GitHub</a>
-        <a href="https://github.com/kraten/chimlo/discussions" target="_blank" rel="noopener" style="color:var(--muted);">Discussions</a>
-        <a href="https://github.com/kraten/chimlo/blob/main/Docs/ARCHITECTURE.md" target="_blank" rel="noopener" style="color:var(--muted);">Architecture</a>
-        <a href="https://github.com/kraten/chimlo/blob/main/LICENSE" target="_blank" rel="noopener" style="color:var(--muted);">GPL-3.0</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="section-shell footer-top">
+      <a class="footer-brand" href="#top"><img src="assets/chimlo-icon.png" alt=""><span>Chimlo</span></a>
+      <div class="footer-links">
+        <a href="https://github.com/kraten/chimlo">GitHub</a>
+        <a href="https://github.com/kraten/chimlo/releases">Releases</a>
+        <a href="https://github.com/kraten/chimlo/blob/main/CONTRIBUTING.md">Contribute</a>
+        <a href="https://github.com/kraten/chimlo/blob/main/LICENSE">GPL-3.0</a>
       </div>
     </div>
-    <div style="max-width:1080px; margin:0 auto; padding:0 24px 34px; font-family:'JetBrains Mono'; font-size:11px; color:var(--dim);">© 2026 Chimlo · Built by <a href="https://github.com/kraten" target="_blank" rel="noopener">kraten</a> · Product and integration names belong to their respective owners.</div>
+    <div class="section-shell footer-bottom">Built for the part of the screen that was already there.</div>
   </footer>
-</div>
-</x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1080,&quot;height&quot;:900},&quot;autoDemo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;demoSpeed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:3.6,&quot;min&quot;:2,&quot;max&quot;:8,&quot;step&quot;:0.2,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Demo&quot;}}">
-class Component extends DCLogic {
-  state = { scene: 0, openFaq: 0 };
 
-  componentDidMount() { this._start(); }
-  componentWillUnmount() { clearInterval(this._t); }
+  <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+    <defs>
+      <path id="openai-logo" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729Zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944Zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654 2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
+      <path id="claude-logo" d="m4.714 15.956 4.718-2.648.079-.23-.079-.128h-.231l-8.638-.461-.534-.704.055-.353.48-.321 8.886.668.054-.158-7.143-4.988-.365-.462-.158-1.007.656-.723.88.061 6.248 4.759.145-.104-3.163-5.824-.17-.62c-.061-.255-.103-.467-.103-.728L6.287.134 6.7 0l.996.134.419.364 3.866 8.668.158-.146.904-7.255.377-.911.747-.492.583.28.48.685-1.208 7.32.212.001 4.86-6.189.546-.431h1.032l.759 1.129-.34 1.166-4.858 6.197.073.11 6.646-1.203.832.389.091.394-.328.808-8.585 1.79.048.061 5.85.407.789.522.474.638-.079.486-1.214.619-7.603-1.627v.109l6.703 6.21.128.577-.322.455-.34-.049-6.29-5.094h-.128v.17l3.797 5.82.121 1.08-.17.352-.607.213-.668-.122-4.298-6.105-.14.079-.674 7.255-.315.371-.729.279-.607-.461-.322-.747 1.22-6.46-.14.018-5.336 6.757-.413.164-.716-.37.067-.662.4-.589 5.738-7.89-.006-.158h-.055l-6.338 4.117-1.13.146-.485-.456.061-.747.23-.243 1.907-1.31Z"/>
+    </defs>
+  </svg>
 
-  _start() {
-    clearInterval(this._t);
-    const auto = this.props.autoDemo ?? true;
-    if (!auto) return;
-    const ms = Math.max(1500, (this.props.demoSpeed ?? 3.6) * 1000);
-    this._t = setInterval(() => {
-      this.setState(s => ({ scene: (s.scene + 1) % 4 }));
-    }, ms);
-  }
+  <script>
+    (() => {
+      const spriteFrames = {
+        working: [
+          "............",
+          "....KK......",
+          "...KAAK.....",
+          "..KAAAaK....",
+          "..KWKWWK....",
+          "..KWWWWK..T.",
+          "..KBBBBK.TT.",
+          ".KKBBBBKTT..",
+          "K.KBBBBK....",
+          "..KBBBBK....",
+          "..KK..K.....",
+          "......KK...."
+        ],
+        workingAlt: [
+          "............",
+          "....KK......",
+          "...KAAK.....",
+          "..KAAAaK....",
+          "..KWWKWK....",
+          "T.KWWWWK....",
+          "TT.KBBBBK...",
+          ".TTKBBBBKK..",
+          "...KBBBBK.K.",
+          "...KBBBBK...",
+          "...K..KK....",
+          "..KK........"
+        ],
+        success: [
+          "............",
+          "....KK......",
+          "...KAAK.....",
+          "..KAAAAK....",
+          "..KWWWWK....",
+          "..KWKKWK....",
+          "..KBBBBK....",
+          ".KKBBBBKK...",
+          "K.KBBBBK.K..",
+          "..KBBBBK....",
+          "..K.KK.K....",
+          ".KK....KK..."
+        ]
+      };
 
-  _pixel(scale, body, light) {
-    const P = [
-      "....WW.....",
-      "...WBBW....",
-      "..WBBBLW...",
-      "..WVWVVW...",
-      "..WVVVVW..W",
-      "..WBBBBW.WW",
-      ".WWBBBBWWW.",
-      "W.WBBBBW...",
-      "..WBBBBW...",
-      "..WW..W....",
-      "......WW..."
-    ];
-    const map = { W: "#f3f6ee", B: body, L: light, V: "#0b0e08" };
-    const sh = [];
-    P.forEach((row, r) => {
-      row.split("").forEach((ch, c) => {
-        if (ch === "." || ch === " ") return;
-        sh.push(`${c * scale}px ${r * scale}px 0 0 ${map[ch]}`);
+      const palettes = {
+        codex: { K: "#f0f0f0", W: "#0b0b0b", A: "#5fc26b", a: "#9bd6a2", B: "#5fc26b", T: "#f0f0f0" },
+        claude: { K: "#f0f0f0", W: "#0b0b0b", A: "#e08a4d", a: "#efb17e", B: "#e08a4d", T: "#f0f0f0" }
+      };
+
+      const renderSprite = (svg, alternate = false) => {
+        const name = alternate && svg.dataset.sprite === "working" ? "workingAlt" : svg.dataset.sprite;
+        const frame = spriteFrames[name] || spriteFrames.working;
+        const palette = palettes[svg.dataset.palette] || palettes.codex;
+        const pixels = [];
+        frame.forEach((row, y) => [...row].forEach((key, x) => {
+          if (key !== ".") pixels.push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${palette[key] || palette.B}"/>`);
+        }));
+        svg.innerHTML = pixels.join("");
+      };
+
+      const sprites = [...document.querySelectorAll("[data-sprite]")];
+      sprites.forEach((sprite) => renderSprite(sprite));
+      let spriteAlternate = false;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduceMotion) {
+        window.setInterval(() => {
+          spriteAlternate = !spriteAlternate;
+          sprites.forEach((sprite) => renderSprite(sprite, spriteAlternate));
+        }, 520);
+      }
+
+      const clock = document.getElementById("menuClock");
+      const updateClock = () => {
+        const now = new Date();
+        clock.textContent = new Intl.DateTimeFormat("en-US", {
+          weekday: "short", hour: "numeric", minute: "2-digit"
+        }).format(now);
+      };
+      updateClock();
+      window.setInterval(updateClock, 30000);
+
+      const chimlo = document.getElementById("chimloDemo");
+      const capacity = document.getElementById("capacityButton");
+      const compactHit = document.getElementById("compactHit");
+      const close = document.getElementById("closeIsland");
+      const replay = document.getElementById("replayDemo");
+      const pointer = document.getElementById("demoPointer");
+      const demoState = document.getElementById("demoState");
+      const doneTitle = document.getElementById("doneTitle");
+      const doneDetail = document.getElementById("doneDetail");
+      let demoTimers = [];
+      let demoRunning = false;
+
+      const clearDemo = () => {
+        demoTimers.forEach(window.clearTimeout);
+        demoTimers = [];
+        demoRunning = false;
+        pointer.classList.add("is-hidden");
+        pointer.classList.remove("is-pressed");
+      };
+      const later = (delay, task) => {
+        const timer = window.setTimeout(task, delay);
+        demoTimers.push(timer);
+      };
+      const view = (name, label) => {
+        chimlo.dataset.view = name;
+        demoState.textContent = label;
+      };
+      const pointAt = (element) => {
+        const heroRect = document.querySelector(".hero").getBoundingClientRect();
+        const rect = element.getBoundingClientRect();
+        pointer.style.left = `${rect.left - heroRect.left + rect.width * .55}px`;
+        pointer.style.top = `${rect.top - heroRect.top + rect.height * .55}px`;
+        pointer.classList.remove("is-hidden");
+      };
+      const press = () => {
+        pointer.classList.add("is-pressed");
+        later(140, () => pointer.classList.remove("is-pressed"));
+      };
+
+      const runDemo = () => {
+        clearDemo();
+        if (reduceMotion || window.innerWidth < 700) {
+          view("sessions", "Live sessions");
+          return;
+        }
+        demoRunning = true;
+        view("compact", "Watching quietly");
+        pointer.style.left = "64%";
+        pointer.style.top = "43%";
+        later(700, () => {
+          pointAt(compactHit);
+          later(720, () => {
+            press();
+            view("sessions", "Live sessions");
+          });
+        });
+        later(2500, () => {
+          pointAt(capacity);
+          later(680, () => {
+            press();
+            view("usage", "Provider limits");
+          });
+        });
+        later(4750, () => {
+          pointAt(capacity);
+          later(680, () => {
+            press();
+            view("permission", "Claude needs you");
+          });
+        });
+        later(7000, () => {
+          const allow = chimlo.querySelector('[data-decision="allowed"]');
+          pointAt(allow);
+          later(700, () => {
+            press();
+            doneTitle.textContent = "Permission sent to Claude";
+            doneDetail.textContent = "The agent keeps working. Chimlo gets out of the way.";
+            view("done", "Answered in the notch");
+          });
+        });
+        later(9300, () => {
+          view("compact", "Watching quietly");
+          pointer.classList.add("is-hidden");
+          demoRunning = false;
+        });
+      };
+
+      capacity.addEventListener("click", () => {
+        clearDemo();
+        view(chimlo.dataset.view === "usage" ? "sessions" : "usage", chimlo.dataset.view === "usage" ? "Live sessions" : "Provider limits");
       });
-    });
-    return React.createElement("div", {
-      style: { position: "relative", width: P[0].length * scale + "px", height: P.length * scale + "px", imageRendering: "pixelated" }
-    }, React.createElement("div", {
-      style: { position: "absolute", top: 0, left: 0, width: scale + "px", height: scale + "px", boxShadow: sh.join(",") }
-    }));
-  }
+      compactHit.addEventListener("click", () => {
+        clearDemo();
+        view("sessions", "Live sessions");
+      });
+      close.addEventListener("click", () => {
+        clearDemo();
+        view("compact", "Watching quietly");
+      });
+      chimlo.querySelectorAll("[data-decision]").forEach((button) => {
+        button.addEventListener("click", () => {
+          clearDemo();
+          const denied = button.dataset.decision === "denied";
+          doneTitle.textContent = denied ? "Permission denied" : "Permission sent to Claude";
+          doneDetail.textContent = denied ? "Claude pauses without leaving a loose request behind." : "The agent keeps working. Chimlo gets out of the way.";
+          view("done", denied ? "Request denied" : "Answered in the notch");
+        });
+      });
+      const soundButton = chimlo.querySelector('[aria-label="Mute Chimlo sounds"]');
+      soundButton.addEventListener("click", () => {
+        const muted = soundButton.getAttribute("aria-pressed") !== "true";
+        soundButton.setAttribute("aria-pressed", String(muted));
+        soundButton.setAttribute("aria-label", muted ? "Unmute Chimlo sounds" : "Mute Chimlo sounds");
+        soundButton.style.color = muted ? "var(--muted)" : "var(--paper)";
+      });
+      replay.addEventListener("click", runDemo);
 
-  _green(scale) { return this._pixel(scale, "#6cc46a", "#b7e6ab"); }
-  _orange(scale) { return this._pixel(scale, "#ef9a52", "#ffd9ad"); }
+      const tabs = [...document.querySelectorAll(".state-tab")];
+      const captions = {
+        working: "The avatar and title tell you what is moving without pulling focus from your work.",
+        needs: "A Claude permission stays anchored until you answer. No terminal hunt, no modal window.",
+        finished: "Completion is visible at a glance, with the session ready to reopen."
+      };
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          tabs.forEach((item) => item.setAttribute("aria-selected", String(item === tab)));
+          document.querySelectorAll(".native-state").forEach((panel) => panel.classList.toggle("is-current", panel.id === `state-${tab.dataset.state}`));
+          document.getElementById("stateCaption").textContent = captions[tab.dataset.state];
+        });
+      });
+      document.querySelectorAll("#state-needs .permission-action").forEach((button) => {
+        button.addEventListener("click", () => {
+          const finishedTab = tabs.find((tab) => tab.dataset.state === "finished");
+          finishedTab.click();
+          document.getElementById("stateCaption").textContent = button.classList.contains("deny")
+            ? "The request is denied in place. Claude stays paused and the permission does not linger."
+            : "The answer returns to Claude and the finished session remains one click away.";
+        });
+      });
 
-  renderVals() {
-    const s = this.state.scene;
-    const set = (i) => () => { clearInterval(this._t); this.setState({ scene: i }); };
-
-    const CODEX = "var(--codex)", CLAUDE = "var(--claude)";
-    const codexBg = "oklch(0.68 0.15 250 / 0.16)", claudeBg = "oklch(0.75 0.15 55 / 0.16)";
-    const sessions = [
-      { title: "Trace the webhook timeout", you: "Can you verify the release build?", agent: "Codex", model: "5.6 Sol", time: "<1m", color: CODEX, badge: codexBg, comp: this._green(2), active: true },
-      { title: "Review the release build", you: "Please check the build and tests.", agent: "Claude", model: "Opus 4.8", time: "41m", color: CLAUDE, badge: claudeBg, comp: this._orange(2), active: false },
-      { title: "Polish the first-run tour", you: "Smooth out the onboarding flow.", agent: "Codex", model: "5.6 Sol", time: "58m", color: CODEX, badge: codexBg, comp: this._green(2), active: false },
-      { title: "README refresh complete", you: "Update the docs and examples.", agent: "Codex", model: "5.6 Sol", time: "2h", color: CODEX, badge: codexBg, comp: this._green(2), active: false }
-    ];
-
-    const dotColors = ["var(--codex)", "var(--green)", "var(--claude)", "var(--claude)"];
-    const dotLabels = ["Working", "Done", "Question", "Approval"];
-    const dots = [0, 1, 2, 3].map((i) => ({
-      go: set(i), label: dotLabels[i], color: i === s ? dotColors[i] : "var(--line2)"
-    }));
-
-    const features = [
-      { n: "01", title: "Every session in one place", body: "See whether each Codex and Claude Code session is working, waiting, done, or failed without hunting through terminal tabs." },
-      { n: "02", title: "Provider limits in the notch", body: "Check Codex and Claude Code limits from provider-reported data." },
-      { n: "03", title: "Jump to the right terminal", body: "Open a session in its exact terminal tab and pane in iTerm2, Ghostty, or WezTerm." },
-      { n: "04", title: "A native Mac app", body: "Built with AppKit and SwiftUI. Chimlo typically uses under 100 MB of RAM and keeps focus in your current app." },
-      { n: "05", title: "A useful notch between tasks", body: "When no agent needs the space, Chimlo shows media controls plus volume and brightness feedback." },
-      { n: "06", title: "Pixel companions", body: "Animated characters make idle, working, waiting, done, and failed states easy to spot." }
-    ];
-
-    const privacy = [
-      "No Chimlo account or sign-in.",
-      "Prompts and transcripts are not sent to a Chimlo service.",
-      "A timeout never counts as approval."
-    ];
-
-    const faqData = [
-      { q: "Is Chimlo really free?", a: "Yes. Chimlo is free and open source under GPL-3.0. There are no subscriptions, license keys, or paid features." },
-      { q: "Which agents does it work with?", a: "Codex and Claude Code. Chimlo shows both side by side; Claude Code questions and permission requests can also be handled in the notch." },
-      { q: "Can I answer and approve without switching to the terminal?", a: "Claude Code questions and tool permission requests, yes. Pick an answer, deny the action, allow it once, or allow it for the session. Codex approvals stay in Codex." },
-      { q: "Does my data leave my Mac?", a: "Chimlo reads local session data and does not send prompts, transcripts, or permission details to a Chimlo service. There is no telemetry." },
-      { q: "Does it work without a notch?", a: "Yes. Chimlo uses the notch on compatible MacBooks and a compact bar at the top of other displays." },
-      { q: "How do I install it?", a: "Download the DMG, drag Chimlo to Applications, and open it. Since Chimlo is not yet notarized, first launch may require Open Anyway in Privacy & Security. Release builds check for signed updates." }
-    ];
-    const faqs = faqData.map((f, i) => ({
-      q: f.q, a: f.a,
-      open: this.state.openFaq === i,
-      sign: this.state.openFaq === i ? "–" : "+",
-      toggle: () => this.setState(st => ({ openFaq: st.openFaq === i ? -1 : i }))
-    }));
-
-    return {
-      scene: s,
-      isWorking: s === 0, isDone: s === 1, isQuestion: s === 2, isApproval: s === 3,
-      sessions,
-      companionAsk: this._orange(3),
-      companionHero: this._green(6),
-      dots, features, privacy, faqs
-    };
-  }
-}
-</script>
-<template id="__bundler_thumbnail">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0b08"/><rect x="30" y="28" width="40" height="44" rx="8" fill="#0b0e08" stroke="#2a3324"/><rect x="42" y="40" width="16" height="10" rx="2" fill="#74c866"/><rect x="42" y="54" width="16" height="6" rx="2" fill="#74c866"/></svg>
-</template>
+      later(900, runDemo);
+    })();
+  </script>
 </body>
 </html>
